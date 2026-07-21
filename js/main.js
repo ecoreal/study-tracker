@@ -9,6 +9,7 @@ import { renderLogs } from './ui/logs.js';
 import { renderIelts } from './ui/ielts-view.js';
 import { renderStats } from './ui/stats-view.js';
 import { renderSettings } from './ui/settings.js';
+import { mountMiniBar } from './ui/mini-bar.js';
 import * as pomodoro from './pomodoro.js';
 
 const VIEWS = {
@@ -23,11 +24,14 @@ const VIEWS = {
 
 let currentView = 'dashboard';
 let renderQueued = false;
+/** When true, next store-driven re-render is skipped for timer view (duration edits still apply via pomodoro). */
+let skipTimerRerender = false;
 
 const viewRoot = document.getElementById('view-root');
 const nav = document.getElementById('main-nav');
 const syncEl = document.getElementById('sync-status');
 const themeBtn = document.getElementById('theme-toggle');
+const miniMount = document.getElementById('mini-bar-root');
 
 const ctx = {
   navigate(view) {
@@ -36,9 +40,14 @@ const ctx = {
     location.hash = view === 'dashboard' ? '' : view;
     paintNav();
     render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
   refresh() {
     render();
+  },
+  /** Call before updateSettings from timer page to avoid wiping inputs */
+  suppressTimerRerender() {
+    skipTimerRerender = true;
   },
 };
 
@@ -58,17 +67,22 @@ function render() {
   viewRoot.replaceChildren();
   const fn = VIEWS[currentView] || renderDashboard;
   fn(viewRoot, ctx);
+  // body class for padding under mini bar
+  document.body.dataset.view = currentView;
 }
 
 function queueRender() {
   if (renderQueued) return;
-  // Don't thrash timer view every tick from store; store changes are rare.
   renderQueued = true;
   requestAnimationFrame(() => {
     renderQueued = false;
-    // Keep timer running UI via its own subscription; full re-render on data change
+    // Timer has its own subscription — full remount on every store write breaks inputs & ring animation
     if (currentView === 'timer') {
-      // re-render timer side panels (task list) but pomodoro sub re-binds
+      if (skipTimerRerender) {
+        skipTimerRerender = false;
+        return;
+      }
+      // Still refresh if data changed from outside (e.g. gist pull) — remount is OK then
       render();
       return;
     }
@@ -112,6 +126,9 @@ subscribeSync((s) => {
   else if (s.status === 'warn') syncEl.classList.add('warn');
   else if (s.status === 'err') syncEl.classList.add('err');
   else if (s.status === 'busy') syncEl.classList.add('busy');
+  syncEl.title = s.lastSync
+    ? `上次同步：${new Date(s.lastSync).toLocaleString()}`
+    : '同步状态';
 });
 
 // Data change → re-render + debounced gist push
@@ -119,12 +136,25 @@ subscribe(() => queueRender());
 setOnChangeHook(() => schedulePush());
 
 // Pomodoro complete toast
-pomodoro.setOnComplete(({ skipped, type }) => {
+pomodoro.setOnComplete(({ skipped, type, nextMode }) => {
   if (skipped) toast('已跳过当前阶段', 'info');
-  else if (type === 'focus') toast('专注完成，休息一下！', 'success');
-  else toast('休息结束', 'success');
-  // refresh stats on other views
+  else if (type === 'focus') {
+    const nextLabel = nextMode === 'long' ? '长休息' : '短休息';
+    toast(`专注完成 → ${nextLabel}`, 'success');
+  } else toast('休息结束 → 专注', 'success');
   if (currentView !== 'timer') queueRender();
+});
+
+// Mini bar
+if (miniMount) mountMiniBar(miniMount, ctx);
+
+// Space to toggle pomodoro when not typing
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' && e.key !== ' ') return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
+  e.preventDefault();
+  pomodoro.toggle();
 });
 
 // Boot

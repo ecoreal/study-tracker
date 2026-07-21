@@ -36,6 +36,15 @@ export function renderSettings(root, ctx) {
     checked: data.settings.sound !== false,
   });
 
+  const autoStartIn = el('input', {
+    type: 'checkbox',
+    checked: Boolean(data.settings.autoStartNext),
+  });
+
+  const goals = data.settings.dailyGoals || { focusMinutes: 120, focusCount: 4 };
+  const goalMinIn = numInput(goals.focusMinutes || 120);
+  const goalCountIn = numInput(goals.focusCount || 4);
+
   const themeSelect = el('select', {}, [
     el('option', { value: 'system', text: '跟随系统' }),
     el('option', { value: 'light', text: '浅色' }),
@@ -87,6 +96,14 @@ export function renderSettings(root, ctx) {
           soundIn,
           el('label', { text: '结束时播放提示音' }),
         ]),
+        el('div', { className: 'checkbox-row' }, [
+          autoStartIn,
+          el('label', { text: '结束后自动开始下一阶段' }),
+        ]),
+        el('p', {
+          className: 'help',
+          text: '快捷键：在非输入框时按空格 = 开始/暂停番茄钟。',
+        }),
         el('div', { className: 'btn-row' }, [
           el('button', {
             type: 'button',
@@ -101,9 +118,35 @@ export function renderSettings(root, ctx) {
                   longEvery: clampInt(everyIn.value, 1, 12, 4),
                 },
                 sound: soundIn.checked,
+                autoStartNext: autoStartIn.checked,
               });
               pomodoro.reloadDurationsIfIdle();
               toast('番茄设置已保存', 'success');
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '每日目标' }),
+        el('p', { className: 'help', text: '显示在「今日」看板的进度条上。' }),
+        el('div', { className: 'form-row inline' }, [
+          field('每日专注分钟', goalMinIn),
+          field('每日番茄个数', goalCountIn),
+        ]),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '保存目标',
+            onClick: () => {
+              updateSettings({
+                dailyGoals: {
+                  focusMinutes: clampInt(goalMinIn.value, 15, 600, 120),
+                  focusCount: clampInt(goalCountIn.value, 1, 20, 4),
+                },
+              });
+              toast('每日目标已保存', 'success');
             },
           }),
         ]),

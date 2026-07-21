@@ -1,4 +1,4 @@
-import { el, toast } from './components.js';
+import { el, toast, promptModal, modal } from './components.js';
 import {
   getData,
   addLog,
@@ -19,6 +19,7 @@ export function renderLogs(root) {
     value: filterDate,
     onChange: (e) => {
       filterDate = e.target.value || todayStr();
+      badge.textContent = filterDate;
       paint();
     },
   });
@@ -39,46 +40,66 @@ export function renderLogs(root) {
   });
 
   const listRoot = el('div');
+  const badge = el('span', { className: 'badge', text: filterDate });
+  const summary = el('p', { className: 'help', text: '' });
 
-  const form = el('form', {
-    className: 'card form-grid',
-    onSubmit: (e) => {
-      e.preventDefault();
-      const log = addLog({
-        date: filterDate,
-        subject: subjectSelect.value,
-        content: contentInput.value,
-        minutes: minutesInput.value,
-      });
-      if (!log) {
-        toast('请填写内容或时长', 'error');
-        return;
-      }
-      contentInput.value = '';
-      toast('日志已保存', 'success');
+  const form = el(
+    'form',
+    {
+      className: 'card form-grid',
+      onSubmit: (e) => {
+        e.preventDefault();
+        const log = addLog({
+          date: filterDate,
+          subject: subjectSelect.value,
+          content: contentInput.value,
+          minutes: minutesInput.value,
+        });
+        if (!log) {
+          toast('请填写内容或时长', 'error');
+          return;
+        }
+        contentInput.value = '';
+        toast('日志已保存', 'success');
+      },
     },
-  }, [
-    el('div', { className: 'card-header' }, [el('h3', { text: '写学习日志' })]),
-    el('div', { className: 'form-row inline' }, [
-      el('div', { className: 'form-row' }, [el('label', { text: '日期' }), dateInput]),
-      el('div', { className: 'form-row' }, [el('label', { text: '科目' }), subjectSelect]),
-      el('div', { className: 'form-row' }, [el('label', { text: '时长（分钟）' }), minutesInput]),
-    ]),
-    el('div', { className: 'form-row' }, [el('label', { text: '内容' }), contentInput]),
-    el('div', { className: 'btn-row' }, [
-      el('button', { type: 'submit', className: 'btn btn-primary', text: '保存日志' }),
-    ]),
-  ]);
+    [
+      el('div', { className: 'card-header' }, [el('h3', { text: '写学习日志' })]),
+      el('div', { className: 'form-row inline' }, [
+        el('div', { className: 'form-row' }, [el('label', { text: '日期' }), dateInput]),
+        el('div', { className: 'form-row' }, [el('label', { text: '科目' }), subjectSelect]),
+        el('div', { className: 'form-row' }, [el('label', { text: '时长（分钟）' }), minutesInput]),
+      ]),
+      el('div', { className: 'form-row' }, [el('label', { text: '内容' }), contentInput]),
+      el('div', { className: 'btn-row' }, [
+        el('button', { type: 'submit', className: 'btn btn-primary', text: '保存日志' }),
+        ...[15, 25, 30, 45, 60].map((m) =>
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            text: `${m}分`,
+            onClick: () => {
+              minutesInput.value = String(m);
+            },
+          }),
+        ),
+      ]),
+    ],
+  );
 
   function paint() {
     listRoot.replaceChildren();
-    // refresh subjects if settings changed
     const subjects = getData().settings.subjects;
     const cur = subjectSelect.value;
     subjectSelect.replaceChildren(...subjects.map((s) => el('option', { value: s, text: s })));
     if (subjects.includes(cur)) subjectSelect.value = cur;
 
     const items = getData().logs.filter((l) => l.date === filterDate);
+    const totalMin = items.reduce((a, l) => a + (l.minutes || 0), 0);
+    summary.textContent = items.length
+      ? `${items.length} 条 · 合计 ${totalMin} 分钟`
+      : '这一天还没有学习日志';
+
     if (!items.length) {
       listRoot.append(el('div', { className: 'empty', text: '这一天还没有学习日志' }));
       return;
@@ -104,10 +125,19 @@ export function renderLogs(root) {
                 type: 'button',
                 className: 'btn btn-sm btn-ghost',
                 text: '编辑',
-                onClick: () => {
-                  const content = prompt('内容', l.content || '');
+                onClick: async () => {
+                  const content = await promptModal({
+                    title: '编辑日志',
+                    label: '内容',
+                    value: l.content || '',
+                    multiline: true,
+                  });
                   if (content == null) return;
-                  const minutes = prompt('分钟', String(l.minutes || 0));
+                  const minutes = await promptModal({
+                    title: '编辑时长',
+                    label: '分钟',
+                    value: String(l.minutes || 0),
+                  });
                   if (minutes == null) return;
                   updateLog(l.id, { content, minutes: Number(minutes) || 0 });
                 },
@@ -116,8 +146,14 @@ export function renderLogs(root) {
                 type: 'button',
                 className: 'btn btn-sm btn-danger',
                 text: '删除',
-                onClick: () => {
-                  if (confirm('删除这条日志？')) removeLog(l.id);
+                onClick: async () => {
+                  const ok = await modal({
+                    title: '删除日志',
+                    body: el('p', { text: '确定删除这条日志？' }),
+                    confirmText: '删除',
+                    danger: true,
+                  });
+                  if (ok) removeLog(l.id);
                 },
               }),
             ]),
@@ -141,13 +177,11 @@ export function renderLogs(root) {
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
           el('h3', { text: '当日记录' }),
-          el('span', { className: 'badge', text: filterDate }),
+          badge,
         ]),
+        summary,
         listRoot,
       ]),
     ]),
   );
-
-  // expose paint for external? main re-renders whole view
-  root._paintLogs = paint;
 }

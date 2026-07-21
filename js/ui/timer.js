@@ -15,6 +15,7 @@ export function renderTimer(root, ctx) {
   const p0 = data.settings.pomodoro;
   const { todayStr } = awaitableToday();
   const tasks = data.tasks.filter((t) => t.date === todayStr && !t.done);
+  const suppress = () => ctx.suppressTimerRerender && ctx.suppressTimerRerender();
 
   const ringWrap = el('div', { className: 'timer-ring-wrap' });
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -94,6 +95,7 @@ export function renderTimer(root, ctx) {
     longIn.value = String(longBreak);
     everyIn.value = String(longEvery);
 
+    suppress();
     updateSettings({ pomodoro: { focus, shortBreak, longBreak, longEvery } });
 
     const st = pomodoro.getState();

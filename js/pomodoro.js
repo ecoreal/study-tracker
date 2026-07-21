@@ -125,6 +125,11 @@ export function pause() {
   updateTitle();
 }
 
+export function toggle() {
+  if (state.running) pause();
+  else start();
+}
+
 export function reset() {
   stopTick();
   state.running = false;
@@ -211,7 +216,14 @@ function completeCurrent({ skipped }) {
   emit();
   updateTitle(true);
 
-  if (onComplete) onComplete({ session, skipped, minutes, type });
+  if (onComplete) onComplete({ session, skipped, minutes, type, nextMode: next });
+
+  // Optional auto-start next phase (not after manual skip)
+  if (!skipped && getData().settings.autoStartNext) {
+    setTimeout(() => {
+      if (!state.running && state.remainingMs === state.totalMs) start();
+    }, 600);
+  }
 }
 
 function updateTitle(reset = false) {

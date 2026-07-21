@@ -13,6 +13,8 @@ const DEFAULT_DATA = () => ({
     subjects: ['雅思', '编程', '其他'],
     theme: 'system', // system | light | dark
     sound: true,
+    autoStartNext: false, // 番茄结束后自动开始下一阶段
+    dailyGoals: { focusMinutes: 120, focusCount: 4 },
   },
   tasks: [],
   logs: [],
@@ -47,6 +49,10 @@ function migrate(raw) {
       ...base.settings,
       ...(raw.settings || {}),
       pomodoro: { ...base.settings.pomodoro, ...(raw.settings?.pomodoro || {}) },
+      dailyGoals: {
+        ...base.settings.dailyGoals,
+        ...(raw.settings?.dailyGoals || {}),
+      },
       subjects: Array.isArray(raw.settings?.subjects) && raw.settings.subjects.length
         ? raw.settings.subjects
         : base.settings.subjects,
@@ -250,6 +256,7 @@ export function updateSettings(patch) {
     ...data.settings,
     ...patch,
     pomodoro: { ...data.settings.pomodoro, ...(patch.pomodoro || {}) },
+    dailyGoals: { ...data.settings.dailyGoals, ...(patch.dailyGoals || {}) },
   };
   if (patch.subjects) data.settings.subjects = [...patch.subjects];
   persist();
