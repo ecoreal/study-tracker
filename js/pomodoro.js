@@ -91,6 +91,18 @@ export function reloadDurationsIfIdle() {
   updateTitle();
 }
 
+/** Set only the current round duration (minutes), without changing saved defaults. */
+export function setCustomDuration(minutes) {
+  if (state.running) return false;
+  const m = Math.min(180, Math.max(1, Math.round(Number(minutes) || 1)));
+  state.totalMs = m * 60 * 1000;
+  state.remainingMs = state.totalMs;
+  state.endsAt = null;
+  emit();
+  updateTitle();
+  return true;
+}
+
 export function start() {
   if (state.remainingMs <= 0) {
     state.remainingMs = durationMs(state.mode);

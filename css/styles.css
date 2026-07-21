@@ -649,6 +649,29 @@ textarea {
   border-color: transparent;
 }
 
+.duration-input {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.btn-row.presets {
+  gap: 6px;
+}
+
+.btn-row.presets .btn {
+  min-width: 3.2rem;
+}
+
+.timer-layout .form-row.inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .timer-layout .form-row.inline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 [data-theme="dark"] .mode-tabs .btn.active {
   color: #042f2e;
 }

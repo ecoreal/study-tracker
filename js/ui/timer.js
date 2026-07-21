@@ -1,6 +1,10 @@
 import { el, toast } from './components.js';
-import { getData } from '../store.js';
+import { getData, updateSettings } from '../store.js';
 import * as pomodoro from '../pomodoro.js';
+
+const FOCUS_PRESETS = [15, 25, 45, 50, 60, 90];
+const SHORT_PRESETS = [3, 5, 10, 15];
+const LONG_PRESETS = [15, 20, 30, 45];
 
 /**
  * @param {HTMLElement} root
@@ -8,6 +12,7 @@ import * as pomodoro from '../pomodoro.js';
  */
 export function renderTimer(root, ctx) {
   const data = getData();
+  const p0 = data.settings.pomodoro;
   const { todayStr } = awaitableToday();
   const tasks = data.tasks.filter((t) => t.date === todayStr && !t.done);
 
@@ -61,8 +66,87 @@ export function renderTimer(root, ctx) {
           return;
         }
         pomodoro.setMode(mode);
+        syncDurationInputs();
       },
     });
+  }
+
+  // —— 自定义时长 ——
+  const focusIn = minInput(p0.focus);
+  const shortIn = minInput(p0.shortBreak);
+  const longIn = minInput(p0.longBreak);
+  const everyIn = minInput(p0.longEvery, 1, 12);
+  const customRoundIn = minInput(p0.focus); // 当前模式本轮时长
+
+  const durationHint = el('p', {
+    className: 'help',
+    dataset: { role: 'duration-hint' },
+    text: '',
+  });
+
+  function applySavedDurations({ toastOk = true } = {}) {
+    const focus = clamp(focusIn.value, 1, 180, 25);
+    const shortBreak = clamp(shortIn.value, 1, 60, 5);
+    const longBreak = clamp(longIn.value, 1, 90, 15);
+    const longEvery = clamp(everyIn.value, 1, 12, 4);
+    focusIn.value = String(focus);
+    shortIn.value = String(shortBreak);
+    longIn.value = String(longBreak);
+    everyIn.value = String(longEvery);
+
+    updateSettings({ pomodoro: { focus, shortBreak, longBreak, longEvery } });
+
+    const st = pomodoro.getState();
+    if (st.running) {
+      if (toastOk) toast('已保存默认时长；当前计时结束后生效', 'info');
+      return;
+    }
+    // 按当前模式应用新默认
+    pomodoro.reloadDurationsIfIdle();
+    syncDurationInputs();
+    if (toastOk) toast('时长已更新', 'success');
+  }
+
+  function applyCustomRound() {
+    const st = pomodoro.getState();
+    if (st.running) {
+      toast('请先暂停再改本轮时长', 'error');
+      return;
+    }
+    const minutes = clamp(customRoundIn.value, 1, 180, 25);
+    customRoundIn.value = String(minutes);
+    pomodoro.setCustomDuration(minutes);
+    toast(`本轮设为 ${minutes} 分钟`, 'success');
+  }
+
+  function setPreset(kind, minutes) {
+    if (kind === 'focus') focusIn.value = String(minutes);
+    if (kind === 'short') shortIn.value = String(minutes);
+    if (kind === 'long') longIn.value = String(minutes);
+    applySavedDurations({ toastOk: true });
+    // 若当前模式匹配，同步本轮输入
+    const st = pomodoro.getState();
+    if (
+      (kind === 'focus' && st.mode === 'focus') ||
+      (kind === 'short' && st.mode === 'short') ||
+      (kind === 'long' && st.mode === 'long')
+    ) {
+      customRoundIn.value = String(minutes);
+    }
+  }
+
+  function syncDurationInputs() {
+    const p = getData().settings.pomodoro;
+    focusIn.value = String(p.focus);
+    shortIn.value = String(p.shortBreak);
+    longIn.value = String(p.longBreak);
+    everyIn.value = String(p.longEvery);
+    const st = pomodoro.getState();
+    const mins = Math.max(1, Math.round(st.totalMs / 60000));
+    customRoundIn.value = String(mins);
+    durationHint.textContent = st.running
+      ? '计时进行中：改默认时长会在本轮结束后生效；改本轮请先暂停。'
+      : '可改默认时长，或只改「本轮分钟」后点应用。';
   }
 
   const controls = el('div', { className: 'timer-controls' }, [
@@ -81,7 +165,10 @@ export function renderTimer(root, ctx) {
       type: 'button',
       className: 'btn btn-ghost',
       text: '重置',
-      onClick: () => pomodoro.reset(),
+      onClick: () => {
+        pomodoro.reset();
+        syncDurationInputs();
+      },
     }),
     el('button', {
       type: 'button',
@@ -90,6 +177,7 @@ export function renderTimer(root, ctx) {
       onClick: () => {
         if (confirm('确定跳过当前阶段？已进行的专注可能仍会记入。')) {
           pomodoro.skip();
+          syncDurationInputs();
         }
       },
     }),
@@ -107,19 +195,83 @@ export function renderTimer(root, ctx) {
   );
 
   const side = el('section', { className: 'card' }, [
-    el('h3', { text: '本轮设置' }),
+    el('h3', { text: '时长设置' }),
     el('div', { className: 'form-grid' }, [
+      el('div', { className: 'form-row' }, [
+        el('label', { text: '本轮分钟（仅当前阶段）' }),
+        el('div', { className: 'btn-row' }, [
+          customRoundIn,
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary btn-sm',
+            text: '应用本轮',
+            onClick: applyCustomRound,
+          }),
+        ]),
+      ]),
+      el('div', { className: 'form-row inline' }, [
+        field('默认专注', focusIn),
+        field('默认短休', shortIn),
+        field('默认长休', longIn),
+        field('每 N 个专注后长休', everyIn),
+      ]),
+      el('div', { className: 'btn-row' }, [
+        el('button', {
+          type: 'button',
+          className: 'btn btn-primary btn-sm',
+          text: '保存为默认',
+          onClick: () => applySavedDurations({ toastOk: true }),
+        }),
+      ]),
+      el('div', { className: 'form-row' }, [
+        el('label', { text: '专注快捷' }),
+        el(
+          'div',
+          { className: 'btn-row presets' },
+          FOCUS_PRESETS.map((m) =>
+            el('button', {
+              type: 'button',
+              className: 'btn btn-ghost btn-sm',
+              text: `${m} 分`,
+              onClick: () => setPreset('focus', m),
+            }),
+          ),
+        ),
+      ]),
+      el('div', { className: 'form-row' }, [
+        el('label', { text: '短休快捷' }),
+        el(
+          'div',
+          { className: 'btn-row presets' },
+          SHORT_PRESETS.map((m) =>
+            el('button', {
+              type: 'button',
+              className: 'btn btn-ghost btn-sm',
+              text: `${m} 分`,
+              onClick: () => setPreset('short', m),
+            }),
+          ),
+        ),
+      ]),
+      el('div', { className: 'form-row' }, [
+        el('label', { text: '长休快捷' }),
+        el(
+          'div',
+          { className: 'btn-row presets' },
+          LONG_PRESETS.map((m) =>
+            el('button', {
+              type: 'button',
+              className: 'btn btn-ghost btn-sm',
+              text: `${m} 分`,
+              onClick: () => setPreset('long', m),
+            }),
+          ),
+        ),
+      ]),
+      durationHint,
       el('div', { className: 'form-row' }, [
         el('label', { text: '关联今日任务' }),
         taskSelect,
-        el('p', { className: 'help', text: '完成后仍可在日志里补充说明。' }),
-      ]),
-      el('div', { className: 'form-row' }, [
-        el('label', { text: '当前配置（可在设置中修改）' }),
-        el('p', {
-          className: 'help',
-          text: `专注 ${data.settings.pomodoro.focus} 分钟 · 短休 ${data.settings.pomodoro.shortBreak} 分钟 · 长休 ${data.settings.pomodoro.longBreak} 分钟 · 每 ${data.settings.pomodoro.longEvery} 个专注后长休`,
-        }),
       ]),
       el('div', { className: 'form-row' }, [
         el('label', { text: '今日已完成专注' }),
@@ -132,6 +284,22 @@ export function renderTimer(root, ctx) {
     ]),
   ]);
 
+  // 回车保存默认 / 应用本轮
+  for (const input of [focusIn, shortIn, longIn, everyIn]) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applySavedDurations({ toastOk: true });
+      }
+    });
+  }
+  customRoundIn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyCustomRound();
+    }
+  });
+
   const panel = el('section', { className: 'card timer-panel' }, [
     modeTabs,
     ringWrap,
@@ -143,7 +311,7 @@ export function renderTimer(root, ctx) {
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: '番茄钟' }),
-          el('p', { text: '专注一段，休息一段。结束时会桌面通知（需授权）。' }),
+          el('p', { text: '可自定义专注/休息时长；结束时桌面通知（需授权）。' }),
         ]),
       ]),
       el('div', { className: 'timer-layout' }, [panel, side]),
@@ -180,10 +348,40 @@ export function renderTimer(root, ctx) {
       ).length;
       hint.textContent = `今日记录 ${todayFocus} 个 · 本轮周期计数 ${st.focusCount}`;
     }
+
+    // 不在 running 时每 tick 改 input，避免打字被冲掉；仅在未运行且 total 变化时同步
+    if (!st.running && document.activeElement !== customRoundIn) {
+      const mins = Math.max(1, Math.round(st.totalMs / 60000));
+      if (customRoundIn.value !== String(mins)) customRoundIn.value = String(mins);
+    }
+    durationHint.textContent = st.running
+      ? '计时进行中：改默认时长会在本轮结束后生效；改本轮请先暂停。'
+      : '可改默认时长，或只改「本轮分钟」后点应用。';
   });
 
-  // cleanup when view destroyed — main clears root, GC is fine; also stop leaking:
+  syncDurationInputs();
   root._cleanup = () => unsub();
+}
+
+function minInput(value, min = 1, max = 180) {
+  return el('input', {
+    type: 'number',
+    min: String(min),
+    max: String(max),
+    step: '1',
+    value: String(value),
+    className: 'duration-input',
+  });
+}
+
+function field(label, control) {
+  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
+}
+
+function clamp(v, min, max, fallback) {
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
 }
 
 function awaitableToday() {
