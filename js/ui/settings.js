@@ -1,0 +1,310 @@
+import { el, toast } from './components.js';
+import {
+  getData,
+  getMeta,
+  updateSettings,
+  exportJson,
+  importJson,
+  clearAllLocalData,
+} from '../store.js';
+import * as gist from '../gist.js';
+import * as pomodoro from '../pomodoro.js';
+import { applyTheme } from '../theme.js';
+
+/**
+ * @param {HTMLElement} root
+ * @param {{ refresh: () => void }} ctx
+ */
+export function renderSettings(root, ctx) {
+  const data = getData();
+  const meta = getMeta();
+  const p = data.settings.pomodoro;
+
+  const focusIn = numInput(p.focus);
+  const shortIn = numInput(p.shortBreak);
+  const longIn = numInput(p.longBreak);
+  const everyIn = numInput(p.longEvery);
+
+  const subjectsIn = el('input', {
+    type: 'text',
+    value: data.settings.subjects.join('、'),
+    placeholder: '用顿号或逗号分隔，如：雅思、编程、数学',
+  });
+
+  const soundIn = el('input', {
+    type: 'checkbox',
+    checked: data.settings.sound !== false,
+  });
+
+  const themeSelect = el('select', {}, [
+    el('option', { value: 'system', text: '跟随系统' }),
+    el('option', { value: 'light', text: '浅色' }),
+    el('option', { value: 'dark', text: '深色' }),
+  ]);
+  themeSelect.value = data.settings.theme || 'system';
+
+  const tokenIn = el('input', {
+    type: 'password',
+    value: meta.token || '',
+    placeholder: 'ghp_… 仅需 gist 权限',
+    autocomplete: 'off',
+  });
+  const gistIdIn = el('input', {
+    type: 'text',
+    value: meta.gistId || '',
+    placeholder: '可留空，连接时自动创建/查找',
+    autocomplete: 'off',
+  });
+
+  const syncInfo = el('p', {
+    className: 'help',
+    text: syncText(gist.getSyncState()),
+  });
+
+  const unsubSync = gist.subscribeSync((s) => {
+    syncInfo.textContent = syncText(s);
+  });
+  root._cleanup = () => unsubSync();
+
+  root.append(
+    el('div', { className: 'view' }, [
+      el('div', { className: 'view-header' }, [
+        el('div', {}, [
+          el('h2', { text: '设置' }),
+          el('p', { text: '番茄参数、科目、主题与 Gist 云同步。' }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '番茄钟' }),
+        el('div', { className: 'form-row inline' }, [
+          field('专注（分钟）', focusIn),
+          field('短休（分钟）', shortIn),
+          field('长休（分钟）', longIn),
+          field('每 N 个专注后长休', everyIn),
+        ]),
+        el('div', { className: 'checkbox-row' }, [
+          soundIn,
+          el('label', { text: '结束时播放提示音' }),
+        ]),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '保存番茄设置',
+            onClick: () => {
+              updateSettings({
+                pomodoro: {
+                  focus: clampInt(focusIn.value, 1, 180, 25),
+                  shortBreak: clampInt(shortIn.value, 1, 60, 5),
+                  longBreak: clampInt(longIn.value, 1, 60, 15),
+                  longEvery: clampInt(everyIn.value, 1, 12, 4),
+                },
+                sound: soundIn.checked,
+              });
+              pomodoro.reloadDurationsIfIdle();
+              toast('番茄设置已保存', 'success');
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '科目与主题' }),
+        field('科目标签', subjectsIn),
+        el('p', { className: 'help', text: '用顿号「、」或逗号「,」分隔。' }),
+        field('主题', themeSelect),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '保存',
+            onClick: () => {
+              const subjects = subjectsIn.value
+                .split(/[,，、]/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              updateSettings({
+                subjects: subjects.length ? subjects : ['雅思', '编程', '其他'],
+                theme: themeSelect.value,
+              });
+              applyTheme(themeSelect.value);
+              toast('已保存', 'success');
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: 'GitHub Gist 同步' }),
+        el('div', { className: 'callout' }, [
+          document.createTextNode('在 GitHub 创建 Classic PAT，勾选 '),
+          el('span', { className: 'kbd', text: 'gist' }),
+          document.createTextNode(' 权限即可。Token 只保存在本机浏览器，不会上传到仓库。'),
+          el('br'),
+          el('a', {
+            href: 'https://github.com/settings/tokens/new?scopes=gist&description=study-tracker',
+            target: '_blank',
+            rel: 'noopener',
+            text: '打开创建 Token 页面',
+          }),
+        ]),
+        field('Personal Access Token', tokenIn),
+        field('Gist ID（可选）', gistIdIn),
+        syncInfo,
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '连接 / 创建 Gist',
+            onClick: async () => {
+              try {
+                const r = await gist.connect({
+                  token: tokenIn.value.trim(),
+                  gistId: gistIdIn.value.trim(),
+                });
+                gistIdIn.value = r.gistId;
+                toast('Gist 已连接', 'success');
+                ctx.refresh();
+              } catch (e) {
+                toast(e.message || '连接失败', 'error');
+              }
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '立即同步',
+            onClick: async () => {
+              try {
+                await gist.push({ immediate: true });
+                toast('已推送', 'success');
+              } catch (e) {
+                toast(e.message || '同步失败', 'error');
+              }
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '强制拉取',
+            onClick: async () => {
+              if (!confirm('将用云端数据覆盖本地，确定？')) return;
+              try {
+                await gist.pull({ force: true });
+                toast('已从云端覆盖本地', 'success');
+                ctx.refresh();
+              } catch (e) {
+                toast(e.message || '拉取失败', 'error');
+              }
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-danger',
+            text: '断开',
+            onClick: () => {
+              gist.disconnect();
+              tokenIn.value = '';
+              gistIdIn.value = '';
+              toast('已断开（本地数据仍保留）', 'info');
+            },
+          }),
+        ]),
+        el('p', {
+          className: 'help',
+          text: '建议以一台设备为主编辑，避免多端同时狂改导致后写覆盖。',
+        }),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '备份' }),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '导出 JSON',
+            onClick: () => {
+              const blob = new Blob([exportJson()], { type: 'application/json' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `study-tracker-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+              toast('已导出', 'success');
+            },
+          }),
+          el('label', { className: 'btn btn-ghost', style: { cursor: 'pointer' } }, [
+            document.createTextNode('导入 JSON'),
+            el('input', {
+              type: 'file',
+              accept: 'application/json,.json',
+              style: { display: 'none' },
+              onChange: async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  importJson(text);
+                  toast('导入成功', 'success');
+                  ctx.refresh();
+                } catch (err) {
+                  toast(err.message || '导入失败', 'error');
+                }
+                e.target.value = '';
+              },
+            }),
+          ]),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-danger',
+            text: '清空本地数据',
+            onClick: () => {
+              if (!confirm('确定清空本机全部学习数据？此操作不可撤销（Gist 云端不受影响）。')) return;
+              clearAllLocalData();
+              toast('本地数据已清空', 'info');
+              ctx.refresh();
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card' }, [
+        el('h3', { text: '使用说明' }),
+        el('div', { className: 'help' }, [
+          el('p', {
+            text: '1. 日常在「今日 / 任务 / 日志 / 雅思 / 番茄钟」记录学习。',
+          }),
+          el('p', {
+            text: '2. 在设置中粘贴 gist 权限的 PAT 并连接，数据会同步到私有 Gist。',
+          }),
+          el('p', {
+            text: '3. 换设备：打开同一 GitHub Pages 地址 → 设置里填同一个 PAT → 连接后自动找到 study-tracker-data Gist。',
+          }),
+          el('p', {
+            text: '4. 站点地址：https://ecoreal.github.io/study-tracker/',
+          }),
+        ]),
+      ]),
+    ]),
+  );
+}
+
+function numInput(value) {
+  return el('input', { type: 'number', min: '1', value: String(value) });
+}
+
+function field(label, control) {
+  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
+}
+
+function clampInt(v, min, max, fallback) {
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function syncText(s) {
+  const last = s.lastSync ? ` · 上次 ${new Date(s.lastSync).toLocaleString()}` : '';
+  return `状态：${s.message}${last}`;
+}
