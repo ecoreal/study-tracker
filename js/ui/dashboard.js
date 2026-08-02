@@ -1,7 +1,7 @@
 import { el, progressBar } from './components.js';
 import { getData, todayStr, toggleTask, addTask } from '../store.js';
 import { streakDays, todayFocusStats, todayTasksStats, weekFocusMinutes } from '../stats.js';
-import { formatBand } from '../ielts.js';
+import { formatBand, bandOf } from '../ielts.js';
 import * as pomodoro from '../pomodoro.js';
 
 /**
@@ -182,7 +182,7 @@ export function renderDashboard(root, ctx) {
                   ]),
                   el('div', {
                     className: 'item-meta',
-                    text: `${lastIelts.date} · L${formatBand(lastIelts.listening)} R${formatBand(lastIelts.reading)} W${formatBand(lastIelts.writing)} S${formatBand(lastIelts.speaking)}`,
+                    text: `${lastIelts.date} · L${formatBand(bandOf(lastIelts.listening))} R${formatBand(bandOf(lastIelts.reading))} W${formatBand(bandOf(lastIelts.writing))} S${formatBand(bandOf(lastIelts.speaking))}`,
                   }),
                 ]),
               ]),

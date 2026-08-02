@@ -38,6 +38,36 @@ export function bandOptions() {
 }
 
 export function formatBand(v) {
+  // tolerate detail objects by delegating to bandOf when needed
+  if (v != null && typeof v === 'object') return formatBand(bandOf(v));
   if (v == null || v === '') return '—';
-  return Number(v).toFixed(1);
+  const n = Number(v);
+  return Number.isNaN(n) ? '—' : n.toFixed(1);
+}
+
+/** Resolve band number from either a plain band, or a sub-score object {band, score, correctRate, mistakes}. */
+export function bandOf(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isNaN(v) ? null : v;
+  if (typeof v === 'object') {
+    if (v.band != null) return Number(v.band);
+    if (v.score != null) return Number(v.score);
+  }
+  return null;
+}
+
+/** True when value carries section detail (correct rate / mistakes). */
+export function hasDetail(v) {
+  return (
+    v != null &&
+    typeof v === 'object' &&
+    (v.correctRate != null && v.correctRate > 0 ? true : Array.isArray(v.mistakes) && v.mistakes.length > 0)
+  );
+}
+
+export function correctRatePct(v) {
+  if (v == null || typeof v !== 'object' || v.correctRate == null) return null;
+  const n = Number(v.correctRate);
+  if (Number.isNaN(n) || n <= 0) return null;
+  return Math.round(n * 100);
 }

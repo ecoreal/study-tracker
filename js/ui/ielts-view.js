@@ -1,4 +1,4 @@
-import { el, toast } from './components.js';
+import { el, toast, modal } from './components.js';
 import {
   getData,
   addIelts,
@@ -6,7 +6,14 @@ import {
   removeIelts,
   todayStr,
 } from '../store.js';
-import { computeOverall, formatBand, bandOptions } from '../ielts.js';
+import {
+  computeOverall,
+  formatBand,
+  bandOptions,
+  bandOf,
+  hasDetail,
+  correctRatePct,
+} from '../ielts.js';
 
 /**
  * @param {HTMLElement} root
@@ -36,9 +43,23 @@ export function renderIelts(root) {
     ]);
     return el('div', { className: 'form-row' }, [el('label', { text: label }), sel]);
   };
+  const mkPct = (name, label, placeholder = '如 0.75') =>
+    el('div', { className: 'form-row section-mini' }, [
+      el('label', { text: label }),
+      el('input', { name, type: 'text', placeholder, autocomplete: 'off' }),
+    ]);
+  const mkMistakes = (name, label) =>
+    el('div', { className: 'form-row section-mistakes' }, [
+      el('label', { text: label }),
+      el('textarea', { name, placeholder: '每行一条：题干 / 错原因…', rows: 2 }),
+    ]);
 
   const L = mkBand('listening', 'Listening');
+  const Lrate = mkPct('listeningRate', '正确率', '0.00 ~ 1.00');
+  const Lmis = mkMistakes('listeningMistakes', '听力错题');
   const R = mkBand('reading', 'Reading');
+  const Rrate = mkPct('readingRate', '正确率', '0.00 ~ 1.00');
+  const Rmis = mkMistakes('readingMistakes', '阅读错题');
   const W = mkBand('writing', 'Writing');
   const S = mkBand('speaking', 'Speaking');
   const O = mkBand('overall', 'Overall（可自动）');
@@ -68,35 +89,73 @@ export function renderIelts(root) {
     const v = wrap.querySelector('select').value;
     return v === '' ? null : Number(v);
   }
+  function rateVal(wrap) {
+    if (!wrap) return null;
+    const v = wrap.querySelector('input').value.trim();
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  }
+  function mistakesVal(wrap) {
+    if (!wrap) return [];
+    return wrap
+      .querySelector('textarea')
+      .value.split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
 
   const form = el('form', {
     className: 'card form-grid',
     onSubmit: (e) => {
       e.preventDefault();
       let overall = num(O);
-      const listening = num(L);
-      const reading = num(R);
+      const listeningBand = num(L);
+      const readingBand = num(R);
+      const listening = {
+        band: listeningBand,
+        correctRate: rateVal(Lrate),
+        mistakes: mistakesVal(Lmis),
+      };
+      const reading = {
+        band: readingBand,
+        correctRate: rateVal(Rrate),
+        mistakes: mistakesVal(Rmis),
+      };
+      const hasListening =
+        listeningBand != null ||
+        (listening.correctRate != null && listening.correctRate > 0) ||
+        listening.mistakes.length > 0;
+      const hasReading =
+        readingBand != null ||
+        (reading.correctRate != null && reading.correctRate > 0) ||
+        reading.mistakes.length > 0;
       const writing = num(W);
       const speaking = num(S);
       if (modeSelect.value === 'full' && overall == null) {
-        overall = computeOverall(listening, reading, writing, speaking);
+        overall = computeOverall(
+          listeningBand,
+          readingBand,
+          writing,
+          speaking,
+        );
       }
       if (
-        listening == null &&
-        reading == null &&
+        !hasListening &&
+        !hasReading &&
         writing == null &&
         speaking == null &&
         overall == null
       ) {
-        toast('请至少填写一个分数', 'error');
+        toast('请至少填写一个分数或正确率 / 错题', 'error');
         return;
       }
       addIelts({
         date: dateInput.value || todayStr(),
         paper: paperInput.value,
         mode: modeSelect.value,
-        listening,
-        reading,
+        listening: hasListening ? listening : null,
+        reading: hasReading ? reading : null,
         writing,
         speaking,
         overall,
@@ -104,6 +163,10 @@ export function renderIelts(root) {
       });
       paperInput.value = '';
       notes.value = '';
+      Lrate.querySelector('input').value = '';
+      Rrate.querySelector('input').value = '';
+      Lmis.querySelector('textarea').value = '';
+      Rmis.querySelector('textarea').value = '';
       for (const wrap of [L, R, W, S, O]) wrap.querySelector('select').value = '';
       toast('雅思成绩已记录', 'success');
     },
@@ -118,6 +181,18 @@ export function renderIelts(root) {
       el('div', { className: 'form-row' }, [el('label', { text: '模式' }), modeSelect]),
     ]),
     el('div', { className: 'form-row inline' }, [L, R, W, S, O]),
+    el('div', { className: 'subscore-grid' }, [
+      el('div', { className: 'subscore-block' }, [
+        el('div', { className: 'subscore-title', text: '听力明细' }),
+        Lrate,
+        Lmis,
+      ]),
+      el('div', { className: 'subscore-block' }, [
+        el('div', { className: 'subscore-title', text: '阅读明细' }),
+        Rrate,
+        Rmis,
+      ]),
+    ]),
     el('div', { className: 'form-row' }, [el('label', { text: '备注' }), notes]),
     el('div', { className: 'btn-row' }, [
       el('button', { type: 'submit', className: 'btn btn-primary', text: '保存成绩' }),
@@ -184,8 +259,16 @@ export function renderIelts(root) {
       el(
         'div',
         { className: 'list' },
-        desc.map((item) =>
-          el('div', { className: 'list-item' }, [
+        desc.map((item) => renderItem(item)),
+      ),
+    );
+  }
+
+  function renderItem(item) {
+    const detailL = hasDetail(item.listening) || bandOf(item.listening) != null;
+    const detailR = hasDetail(item.reading) || bandOf(item.reading) != null;
+
+    return el('div', { className: 'list-item' }, [
             el('div', { className: 'item-body' }, [
               el('div', { className: 'item-title' }, [
                 el('span', {
@@ -194,41 +277,220 @@ export function renderIelts(root) {
                 }),
                 document.createTextNode(` ${item.date} · ${modeLabel(item.mode)}`),
               ]),
-              el('div', { className: 'score-grid', style: { marginTop: '8px' } }, [
-                scorePill('L', item.listening),
-                scorePill('R', item.reading),
-                scorePill('W', item.writing),
-                scorePill('S', item.speaking),
-                scorePill('OVR', item.overall, true),
-              ]),
+            el('div', { className: 'score-grid', style: { marginTop: '8px' } }, [
+              scorePill('L', item.listening),
+              scorePill('R', item.reading),
+              scorePill('W', item.writing),
+              scorePill('S', item.speaking),
+              scorePill('OVR', item.overall, true),
+            ]),
               item.notes
                 ? el('div', { className: 'item-meta', text: item.notes })
                 : null,
+          detailL ? sectionDetail('听力', item.listening) : null,
+          detailR ? sectionDetail('阅读', item.reading) : null,
             ]),
             el('div', { className: 'item-actions' }, [
               el('button', {
                 type: 'button',
                 className: 'btn btn-sm btn-ghost',
-                text: '改 Overall',
-                onClick: () => {
-                  const v = prompt('Overall (0-9, 0.5 步进)', formatBand(item.overall));
-                  if (v == null) return;
-                  updateIelts(item.id, { overall: v === '' ? null : Number(v) });
-                },
+                text: '编辑',
+                onClick: () => openEdit(item),
               }),
               el('button', {
                 type: 'button',
                 className: 'btn btn-sm btn-danger',
                 text: '删除',
                 onClick: () => {
-                  if (confirm('删除这条成绩？')) removeIelts(item.id);
+              confirmDelete(item);
                 },
               }),
             ]),
-          ]),
-        ),
-      ),
+    ]);
+  }
+
+  function sectionDetail(label, section) {
+    const band = bandOf(section);
+    const pct = correctRatePct(section);
+    const mistakes =
+      section && typeof section === 'object' && Array.isArray(section.mistakes)
+        ? section.mistakes
+        : [];
+    const parts = [];
+    if (band != null) parts.push(`${label} Band ${formatBand(band)}`);
+    if (pct != null) parts.push(`正确率 ${pct}%`);
+    const head = el('div', { className: 'section-detail' }, [
+      el('div', {
+        className: 'section-detail-head',
+        text: parts.join(' · ') || label,
+      }),
+    ]);
+    if (mistakes.length) {
+      head.append(
+        el('ul', { className: 'mistake-list' }, mistakes.map((m) => el('li', { text: m }))),
+      );
+    }
+    return head;
+  }
+
+  async function confirmDelete(item) {
+    const ok = await modal({
+      title: '删除成绩',
+      body: el('p', {
+        text: `确定删除 ${item.date} 的「${item.paper || '未命名'}」吗？此操作不可恢复。`,
+      }),
+      confirmText: '删除',
+      danger: true,
+    });
+    if (ok) {
+      removeIelts(item.id);
+      toast('已删除', 'success');
+    }
+  }
+
+  function openEdit(item) {
+    const bands = bandOptions();
+    const mk = (name, label, value) => {
+      const sel = el('select', { name }, [
+        el('option', { value: '', text: '—' }),
+        ...bands.map((b) => el('option', { value: b, text: b })),
+      ]);
+      sel.value = value != null ? Number(value).toFixed(1) : '';
+      return el('div', { className: 'form-row' }, [el('label', { text: label }), sel]);
+    };
+    const inNum = (name, label, value, placeholder) => {
+      const inp = el('input', {
+        type: 'text',
+        name,
+        value: value != null && value !== '' ? String(value) : '',
+        placeholder,
+        autocomplete: 'off',
+      });
+      return el('div', { className: 'form-row' }, [el('label', { text: label }), inp]);
+    };
+    const inArea = (name, label, lines) => {
+      const ta = el('textarea', { name, rows: 3, placeholder: '每行一条' });
+      ta.value = Array.isArray(lines) ? lines.join('\n') : '';
+      return el('div', { className: 'form-row' }, [el('label', { text: label }), ta]);
+    };
+
+    const dateIn = el('input', {
+      type: 'date',
+      value: item.date || todayStr(),
+    });
+    const paperIn = el('input', {
+      type: 'text',
+      value: item.paper || '',
+      placeholder: '例如 C18 T2',
+      autocomplete: 'off',
+    });
+
+    const listeningBand = mk('listeningBand', 'Listening 分数', bandOf(item.listening));
+    const listeningRate = inNum(
+      'listeningRate',
+      '正确率',
+      typeof item.listening === 'object' && item.listening?.correctRate != null
+        ? Number(item.listening.correctRate).toFixed(2)
+        : '',
+      '0.00 ~ 1.00',
     );
+    const listeningMis = inArea(
+      'listeningMistakes',
+      '听力错题',
+      typeof item.listening === 'object' ? item.listening?.mistakes : [],
+    );
+    const readingBand = mk('readingBand', 'Reading 分数', bandOf(item.reading));
+    const readingRate = inNum(
+      'readingRate',
+      '正确率',
+      typeof item.reading === 'object' && item.reading?.correctRate != null
+        ? Number(item.reading.correctRate).toFixed(2)
+        : '',
+      '0.00 ~ 1.00',
+    );
+    const readingMis = inArea(
+      'readingMistakes',
+      '阅读错题',
+      typeof item.reading === 'object' ? item.reading?.mistakes : [],
+    );
+    const writingIn = mk('writing', 'Writing 分数', bandOf(item.writing));
+    const speakingIn = mk('speaking', 'Speaking 分数', bandOf(item.speaking));
+    const overallIn = mk('overall', 'Overall', bandOf(item.overall));
+    const notesIn = el('textarea', { rows: 2, placeholder: '备注…' });
+    notesIn.value = item.notes || '';
+
+    const body = el('div', { className: 'form-grid' }, [
+      el('div', { className: 'form-row inline' }, [
+        el('div', { className: 'form-row' }, [el('label', { text: '日期' }), dateIn]),
+        el('div', { className: 'form-row' }, [el('label', { text: '试卷' }), paperIn]),
+      ]),
+      el('div', { className: 'subscore-title', text: '听力' }),
+      el('div', { className: 'form-row inline' }, [listeningBand, listeningRate]),
+      listeningMis,
+      el('div', { className: 'subscore-title', text: '阅读' }),
+      el('div', { className: 'form-row inline' }, [readingBand, readingRate]),
+      readingMis,
+      el('div', { className: 'form-row inline' }, [writingIn, speakingIn, overallIn]),
+      el('div', { className: 'form-row' }, [el('label', { text: '备注' }), notesIn]),
+    ]);
+
+    modal({
+      title: '编辑成绩',
+      body,
+      confirmText: '保存',
+    }).then((ok) => {
+      if (!ok) return;
+      const parseBand = (wrap) => {
+        const v = wrap.querySelector('select').value;
+        return v === '' ? null : Number(v);
+      };
+      const parseRate = (wrap) => {
+        const raw = wrap.querySelector('input').value.trim();
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isNaN(n) ? null : n;
+      };
+      const parseList = (wrap) =>
+        wrap
+          .querySelector('textarea')
+          .value.split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+      const lb = parseBand(listeningBand);
+      const rb = parseBand(readingBand);
+      const listening = {
+        band: lb,
+        correctRate: parseRate(listeningRate),
+        mistakes: parseList(listeningMis),
+      };
+      const reading = {
+        band: rb,
+        correctRate: parseRate(readingRate),
+        mistakes: parseList(readingMis),
+      };
+      const hasL =
+        lb != null ||
+        (listening.correctRate != null && listening.correctRate > 0) ||
+        listening.mistakes.length > 0;
+      const hasR =
+        rb != null ||
+        (reading.correctRate != null && reading.correctRate > 0) ||
+        reading.mistakes.length > 0;
+
+      updateIelts(item.id, {
+        date: dateIn.value || todayStr(),
+        paper: paperIn.value.trim(),
+        listening: hasL ? listening : null,
+        reading: hasR ? reading : null,
+        writing: parseBand(writingIn),
+        speaking: parseBand(speakingIn),
+        overall: parseBand(overallIn),
+        notes: notesIn.value.trim(),
+      });
+      toast('已保存', 'success');
+      paint();
+    });
   }
 
   paint();
@@ -270,9 +532,12 @@ function modeLabel(m) {
 }
 
 function scorePill(k, v, overall = false) {
+  const band = bandOf(v);
+  const pct = correctRatePct(v);
   return el('div', { className: `score-pill${overall ? ' overall' : ''}` }, [
     el('div', { className: 'k', text: k }),
-    el('div', { className: 'v', text: formatBand(v) }),
+    el('div', { className: 'v', text: band == null ? formatBand(v) : formatBand(band) }),
+    pct != null ? el('div', { className: 'sub', text: `${pct}%` }) : null,
   ]);
 }
 
@@ -317,8 +582,9 @@ function sparkline(items) {
     c.setAttribute('cx', String(p.x));
     c.setAttribute('cy', String(p.y));
     c.setAttribute('r', '4');
-    c.innerHTML = `<title>${p.item.date} · ${formatBand(p.item.overall)} · ${p.item.paper || ''}</title>`;
-    // title as attribute alternative
+    const t = document.createElementNS(svgNS, 'title');
+    t.textContent = `${p.item.date} · ${formatBand(p.item.overall)}${p.item.paper ? ` · ${p.item.paper}` : ''}`;
+    c.append(t);
     c.setAttribute('title', `${p.item.date}: ${formatBand(p.item.overall)}`);
     svg.append(c);
   }

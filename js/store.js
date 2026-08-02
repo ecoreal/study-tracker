@@ -208,17 +208,18 @@ export function addSession({ type, minutes, taskId = null, date = todayStr() }) 
 
 /* ---- IELTS ---- */
 export function addIelts(entry) {
+  const normalized = normalizeIelts(entry, { ensureIds: false });
   const item = {
     id: uid('i'),
-    date: entry.date || todayStr(),
-    paper: String(entry.paper || '').trim(),
-    mode: entry.mode || 'full',
-    listening: toBand(entry.listening),
-    reading: toBand(entry.reading),
-    writing: toBand(entry.writing),
-    speaking: toBand(entry.speaking),
-    overall: entry.overall != null && entry.overall !== '' ? toBand(entry.overall) : null,
-    notes: String(entry.notes || '').trim(),
+    date: normalized.date || todayStr(),
+    paper: normalized.paper,
+    mode: normalized.mode,
+    listening: normalized.listening,
+    reading: normalized.reading,
+    writing: normalized.writing,
+    speaking: normalized.speaking,
+    overall: normalized.overall,
+    notes: normalized.notes,
     createdAt: new Date().toISOString(),
   };
   data.ielts.unshift(item);
@@ -229,12 +230,11 @@ export function addIelts(entry) {
 export function updateIelts(id, patch) {
   const item = data.ielts.find((x) => x.id === id);
   if (!item) return;
-  Object.assign(item, patch);
-  for (const k of ['listening', 'reading', 'writing', 'speaking', 'overall']) {
-    if (patch[k] !== undefined) {
-      item[k] = patch[k] === '' || patch[k] == null ? null : toBand(patch[k]);
-    }
-  }
+  const next = normalizeIelts({ ...item, ...patch });
+  next.id = item.id;
+  next.createdAt = item.createdAt;
+  const idx = data.ielts.findIndex((x) => x.id === id);
+  if (idx >= 0) data.ielts[idx] = next;
   persist();
 }
 
@@ -296,4 +296,46 @@ export function clearAllLocalData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   for (const fn of listeners) fn(data);
   if (onChangeHook) onChangeHook(data);
+}
+
+export function normalizeIelts(entry, { ensureIds = true } = {}) {
+  const next = { ...(entry || {}) };
+  if (next.paper != null) next.paper = String(next.paper).trim();
+  if (next.mode != null) next.mode = String(next.mode);
+  if (next.notes != null) next.notes = String(next.notes).trim();
+  if (next.date == null) next.date = todayStr();
+  for (const k of ['listening', 'reading']) {
+    next[k] = normalizeIeltsSection(next[k], ensureIds);
+  }
+  for (const k of ['writing', 'speaking', 'overall']) {
+    if (next[k] !== undefined) next[k] = toBand(next[k]);
+  }
+  return next;
+}
+
+function normalizeIeltsSection(value, ensureIds) {
+  if (value == null || value === '') return null;
+  // legacy: plain score number / string becomes band
+  if (typeof value === 'number' || typeof value === 'string') return toBand(value);
+  if (typeof value !== 'object') return null;
+  const out = {
+    band: value.band != null ? toBand(value.band) : (value.score != null ? toBand(value.score) : null),
+    correctRate: value.correctRate != null ? clamp01(value.correctRate) : null,
+    mistakes: Array.isArray(value.mistakes)
+      ? value.mistakes
+          .map((m) => (m == null ? null : String(m).trim()))
+          .filter(Boolean)
+      : [],
+  };
+  if (out.correctRate == null) out.correctRate = 0;
+  if (!Array.isArray(out.mistakes)) out.mistakes = [];
+  if (out.band == null && out.mistakes.length === 0) return out.correctRate > 0 ? out : null;
+  return out;
+}
+
+function clamp01(v) {
+  const n = Number(v);
+  if (Number.isNaN(n)) return null;
+  // accept 0-1 or 0-100 input, store as 0-1
+  return n > 1 ? Math.min(100, n) / 100 : Math.min(1, Math.max(0, n));
 }
