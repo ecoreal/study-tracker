@@ -540,6 +540,16 @@ textarea {
   color: var(--accent);
 }
 
+.badge.warn {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge.muted {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
 /* Timer */
 .timer-layout {
   display: grid;
@@ -1266,4 +1276,300 @@ textarea {
   color: var(--text-muted);
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================
+ * IELTS 改版：tabs / part-line / mistake-form / 目标
+ * ===================================================== */
+.ielts-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  margin: 6px 0 14px;
+}
+
+.ielts-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 8px 12px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ielts-tab:hover {
+  color: var(--text);
+}
+
+.ielts-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+/* ---- Part stats inputs ---- */
+.part-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.part-line {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+@media (max-width: 720px) {
+  .part-stack {
+    grid-template-columns: 1fr;
+  }
+}
+
+.part-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.part-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.part-field {
+  display: grid;
+  gap: 2px;
+}
+
+.part-field label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.part-field input {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+
+.section-mini {
+  margin-top: 2px;
+}
+
+/* ---- Mistake form rows (录入) ---- */
+.mistake-form-list {
+  display: grid;
+  gap: 10px;
+}
+
+.mistake-form {
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: grid;
+  gap: 8px;
+}
+
+.mistake-form-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mistake-form-no {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ---- 学习分析：目标卡 ---- */
+.target-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.target-chip {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.tc-label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.tc-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+/* ---- 学习分析：每 Part 正确率表 ---- */
+.goal-table-wrap {
+  overflow-x: auto;
+}
+
+.goal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.goal-table th,
+.goal-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.goal-table th {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* ---- 4 周趋势 ---- */
+.trend-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.trend-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.trend-swatch.listening { background: var(--primary); }
+.trend-swatch.reading { background: var(--accent); }
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.trend-col {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.trend-bars {
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.trend-bar {
+  width: 22px;
+  border-radius: 4px 4px 0 0;
+  background: var(--bg-muted);
+  min-height: 2px;
+  transition: height 0.2s ease;
+}
+
+.trend-bar.listening { background: var(--primary); }
+.trend-bar.reading { background: var(--accent); }
+
+.trend-week {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.trend-vals {
+  display: flex;
+  gap: 8px;
+  font-size: 0.74rem;
+}
+
+.trend-val.listening { color: var(--primary); }
+.trend-val.reading { color: var(--accent); }
+
+/* ---- 错题本 ---- */
+.mistake-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.mistake-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  align-content: start;
+}
+
+.mistake-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.78rem;
+}
+
+.mistake-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mistake-body {
+  display: grid;
+  gap: 4px;
+}
+
+.mistake-text {
+  font-size: 0.86rem;
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mistake-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+
+.mistake-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }

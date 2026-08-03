@@ -10,6 +10,7 @@ import {
 import * as gist from '../gist.js';
 import * as pomodoro from '../pomodoro.js';
 import { applyTheme } from '../theme.js';
+import { bandOptions } from '../ielts.js';
 
 /**
  * @param {HTMLElement} root
@@ -44,6 +45,11 @@ export function renderSettings(root, ctx) {
   const goals = data.settings.dailyGoals || { focusMinutes: 120, focusCount: 4 };
   const goalMinIn = numInput(goals.focusMinutes || 120);
   const goalCountIn = numInput(goals.focusCount || 4);
+
+  const ieltsGoals = data.settings.ieltsGoals || {};
+  const goalListening = bandSelect(ieltsGoals.listening);
+  const goalReading = bandSelect(ieltsGoals.reading);
+  const goalOverall = bandSelect(ieltsGoals.overall);
 
   const themeSelect = el('select', {}, [
     el('option', { value: 'system', text: '跟随系统' }),
@@ -173,6 +179,36 @@ export function renderSettings(root, ctx) {
               });
               applyTheme(themeSelect.value);
               toast('已保存', 'success');
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '雅思目标分' }),
+        el('p', {
+          className: 'help',
+          text: '在「雅思 → 学习分析」中用来对照当周各 Part 的正确率是否达标。',
+        }),
+        el('div', { className: 'form-row inline' }, [
+          field('听力目标分', goalListening),
+          field('阅读目标分', goalReading),
+          field('总分目标', goalOverall),
+        ]),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '保存目标分',
+            onClick: () => {
+              updateSettings({
+                ieltsGoals: {
+                  listening: goalListening.value === '' ? null : Number(goalListening.value),
+                  reading: goalReading.value === '' ? null : Number(goalReading.value),
+                  overall: goalOverall.value === '' ? null : Number(goalOverall.value),
+                },
+              });
+              toast('雅思目标分已保存', 'success');
             },
           }),
         ]),
@@ -335,6 +371,15 @@ export function renderSettings(root, ctx) {
 
 function numInput(value) {
   return el('input', { type: 'number', min: '1', value: String(value) });
+}
+
+function bandSelect(value) {
+  const sel = el('select', {}, [
+    el('option', { value: '', text: '未设置' }),
+    ...bandOptions().map((b) => el('option', { value: b, text: b })),
+  ]);
+  sel.value = value != null ? Number(value).toFixed(1) : '';
+  return sel;
 }
 
 function field(label, control) {

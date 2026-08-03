@@ -15,6 +15,7 @@ const DEFAULT_DATA = () => ({
     sound: true,
     autoStartNext: false, // 番茄结束后自动开始下一阶段
     dailyGoals: { focusMinutes: 120, focusCount: 4 },
+    ieltsGoals: { listening: null, reading: null, overall: null },
   },
   tasks: [],
   logs: [],
@@ -52,6 +53,10 @@ function migrate(raw) {
       dailyGoals: {
         ...base.settings.dailyGoals,
         ...(raw.settings?.dailyGoals || {}),
+      },
+      ieltsGoals: {
+        ...base.settings.ieltsGoals,
+        ...(raw.settings?.ieltsGoals || {}),
       },
       subjects: Array.isArray(raw.settings?.subjects) && raw.settings.subjects.length
         ? raw.settings.subjects
@@ -208,7 +213,8 @@ export function addSession({ type, minutes, taskId = null, date = todayStr() }) 
 
 /* ---- IELTS ---- */
 export function addIelts(entry) {
-  const normalized = normalizeIelts(entry, { ensureIds: false });
+  // ensureIds: mistakes need stable ids so错题本 can edit/delete them later
+  const normalized = normalizeIelts(entry, { ensureIds: true });
   const item = {
     id: uid('i'),
     date: normalized.date || todayStr(),
@@ -257,6 +263,7 @@ export function updateSettings(patch) {
     ...patch,
     pomodoro: { ...data.settings.pomodoro, ...(patch.pomodoro || {}) },
     dailyGoals: { ...data.settings.dailyGoals, ...(patch.dailyGoals || {}) },
+    ieltsGoals: { ...(data.settings.ieltsGoals || {}), ...(patch.ieltsGoals || {}) },
   };
   if (patch.subjects) data.settings.subjects = [...patch.subjects];
   persist();
@@ -323,14 +330,71 @@ function normalizeIeltsSection(value, ensureIds) {
     correctRate: value.correctRate != null ? clamp01(value.correctRate) : null,
     mistakes: Array.isArray(value.mistakes)
       ? value.mistakes
-          .map((m) => (m == null ? null : String(m).trim()))
-          .filter(Boolean)
+          .map((m) => normalizeMistakeLocal(m))
+          .filter((m) => m != null && !mistakeIsEmptyLocal(m))
+          .map((m) => {
+            if (ensureIds && !m.id) m.id = uid();
+            if (!m.createdAt) m.createdAt = new Date().toISOString();
+            return m;
+          })
       : [],
+    partStats: normalizePartStatsLocal(value.partStats),
   };
   if (out.correctRate == null) out.correctRate = 0;
-  if (!Array.isArray(out.mistakes)) out.mistakes = [];
-  if (out.band == null && out.mistakes.length === 0) return out.correctRate > 0 ? out : null;
+  if (out.partStats == null) delete out.partStats;
+  const hasStats = out.partStats != null && Object.keys(out.partStats).length > 0;
+  if (out.band == null && out.mistakes.length === 0 && !hasStats) return out.correctRate > 0 ? out : null;
   return out;
+}
+
+function normalizeMistakeLocal(m) {
+  const validPart = (v) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 1 || n > 4) return null;
+    return n;
+  };
+  if (typeof m === 'string') {
+    const ans = m.trim();
+    if (!ans) return null;
+    return { id: '', part: null, ans, orig: '', sub: '', reason: '', tag: '', understood: '', note: '', createdAt: '' };
+  }
+  if (m == null || typeof m !== 'object') return null;
+  return {
+    id: m.id || '',
+    part: validPart(m.part),
+    ans: String(m.ans ?? m.text ?? '').trim(),
+    orig: String(m.orig ?? '').trim(),
+    sub: String(m.sub ?? '').trim(),
+    reason: String(m.reason ?? '').trim(),
+    tag: String(m.tag ?? '').trim(),
+    understood: String(m.understood ?? '').trim(),
+    note: String(m.note ?? '').trim(),
+    createdAt: m.createdAt || '',
+  };
+}
+
+function mistakeIsEmptyLocal(m) {
+  return (
+    String(m.ans || '').trim() === '' &&
+    String(m.orig || '').trim() === '' &&
+    String(m.sub || '').trim() === '' &&
+    String(m.reason || '').trim() === ''
+  );
+}
+
+function normalizePartStatsLocal(partStats) {
+  if (partStats == null || typeof partStats !== 'object') return null;
+  const out = {};
+  for (const [k, v] of Object.entries(partStats)) {
+    const idx = Number(k);
+    if (!Number.isFinite(idx) || idx < 1 || idx > 4) continue;
+    if (v == null || typeof v !== 'object') continue;
+    const total = Math.max(0, Math.round(Number(v.total) || 0));
+    const correct = Math.max(0, Math.min(total, Math.round(Number(v.correct) || 0)));
+    if (total > 0) out[String(idx)] = { total, correct };
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function clamp01(v) {
