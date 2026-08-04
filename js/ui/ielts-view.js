@@ -26,7 +26,6 @@ import {
   PART_QUESTIONS,
   MISTAKE_TAGS,
   QUESTION_TAGS_READING,
-  UNDERSTOOD_OPTIONS,
 } from '../ielts.js';
 
 const SUBJECT_LABEL = { listening: '听力', reading: '阅读' };
@@ -148,12 +147,15 @@ export function renderIelts(root) {
     });
   }
 
-  function buildSubjectForm(subject) {
+  function buildSubjectForm(subject, initial = null) {
     const parts = PART_QUESTIONS[subject] || [10, 10, 10, 10];
     const tagOptions = subject === 'reading' ? QUESTION_TAGS_READING : MISTAKE_TAGS;
+    const sec = initial && typeof initial === 'object' ? initial : null;
+    const partStats = sec && sec.partStats && typeof sec.partStats === 'object' ? sec.partStats : {};
     const partInputs = parts.map((questions, i) => {
-      const total = el('input', { type: 'number', min: '0', max: String(questions), value: String(questions) });
-      const correct = el('input', { type: 'number', min: '0', max: String(questions), value: '', placeholder: '对几题' });
+      const rec = partStats[String(i + 1)] || null;
+      const total = el('input', { type: 'number', min: '0', max: String(questions), value: String(rec ? rec.total : questions) });
+      const correct = el('input', { type: 'number', min: '0', max: String(questions), value: rec && rec.correct != null ? String(rec.correct) : '', placeholder: '对几题' });
       return {
         total, correct,
         row: el('div', { className: 'part-line' }, [
@@ -183,16 +185,18 @@ export function renderIelts(root) {
       });
     }
 
-    const mkBandPct = el('input', { type: 'text', placeholder: '可选，如 0.7', autocomplete: 'off' });
+    if (sec && Array.isArray(sec.mistakes)) {
+      for (const m of sec.mistakes) {
+        const norm = normalizeMistake(m);
+        if (norm && !mistakeIsEmpty(norm)) mistakesWrap.append(buildMistakeRow(parts.length, tagOptions, norm));
+      }
+      recount();
+    }
 
     return {
       container: el('div', { className: 'subscore-block' }, [
         el('div', { className: 'subscore-title', text: `${SUBJECT_LABEL[subject]}明细（可对空，只用分数也行）` }),
         el('div', { className: 'part-stack' }, partInputs.map((p) => p.row)),
-        el('div', { className: 'form-row section-mini' }, [
-          el('label', { text: '整体正确率（0~1，可选）' }),
-          mkBandPct,
-        ]),
         mistakesWrap,
         el('div', { className: 'btn-row', style: { marginTop: '8px' } }, [addBtn]),
       ]),
@@ -209,17 +213,17 @@ export function renderIelts(root) {
         mistakesWrap.querySelectorAll('.mistake-form').forEach((node) => {
           const m = readMistakeRow(node);
           const norm = normalizeMistake(m);
-          if (norm && !mistakeIsEmpty(norm)) mistakes.push({ ...norm, id: uid('mk') });
+          if (norm && !mistakeIsEmpty(norm)) {
+            if (!norm.id) norm.id = uid('mk');
+            mistakes.push(norm);
+          }
         });
-        const rate = Number(mkBandPct.value.trim());
         return {
-          rate: Number.isFinite(rate) && mkBandPct.value.trim() !== '' ? rate : null,
           partStats: Object.keys(partStats).length ? partStats : null,
           mistakes,
         };
       },
       reset() {
-        mkBandPct.value = '';
         partInputs.forEach((inp, i) => {
           inp.total.value = String(parts[i]);
           inp.correct.value = '';
@@ -246,11 +250,6 @@ export function renderIelts(root) {
       ...tags.map((t) => el('option', { value: t, text: t })),
     ]), 'tag');
     tagSel.value = initial.tag || '';
-    const udSel = field(el('select', {}, [
-      el('option', { value: '', text: '听懂程度' }),
-      ...UNDERSTOOD_OPTIONS.map((o) => el('option', { value: o.value, text: o.text })),
-    ]), 'understood');
-    udSel.value = initial.understood || '';
     const note = field(el('input', { type: 'text', placeholder: '备注（可选）', value: initial.note || '', autocomplete: 'off' }), 'note');
 
     const delBtn = el('button', {
@@ -269,7 +268,6 @@ export function renderIelts(root) {
         el('div', { className: 'form-row' }, [el('label', { text: 'Part' }), partSel]),
         el('div', { className: 'form-row' }, [el('label', { text: '题目/题号' }), ans]),
         el('div', { className: 'form-row' }, [el('label', { text: '错因类型' }), tagSel]),
-        el('div', { className: 'form-row' }, [el('label', { text: '听懂程度' }), udSel]),
       ]),
       el('div', { className: 'form-row inline' }, [
         el('div', { className: 'form-row' }, [el('label', { text: '原文' }), orig]),
@@ -294,7 +292,6 @@ export function renderIelts(root) {
       part: vals('part') || null,
       ans: vals('ans'),
       tag: vals('tag') || '',
-      understood: vals('understood'),
       orig: vals('orig'),
       sub: vals('sub'),
       reason: vals('reason'),
@@ -328,24 +325,22 @@ export function renderIelts(root) {
         const lb = selVal(L);
         const rb = selVal(R);
 
-        const listeningOk = lb != null || (listening.rate != null && listening.rate > 0)
-          || listening.partStats != null || listening.mistakes.length > 0;
-        const readingOk = rb != null || (reading.rate != null && reading.rate > 0)
-          || reading.partStats != null || reading.mistakes.length > 0;
+        const listeningAgg = listening.partStats ? aggregatePartStats('listening', listening.partStats) : null;
+        const readingAgg = reading.partStats ? aggregatePartStats('reading', reading.partStats) : null;
+        const listeningOk = lb != null || (listeningAgg != null && listeningAgg.total > 0)
+          || listening.mistakes.length > 0;
+        const readingOk = rb != null || (readingAgg != null && readingAgg.total > 0)
+          || reading.mistakes.length > 0;
 
         if (!listeningOk && !readingOk && selVal(W) == null && selVal(S) == null && selVal(O) == null) {
           toast('请至少填写一个分数 / Part 统计 / 错题', 'error');
           return;
         }
 
-        const buildSection = (subject, band, ui) => {
-          if (band == null && (ui.rate == null || ui.rate === 0) && ui.partStats == null && ui.mistakes.length === 0) return null;
-          const out = { band, correctRate: ui.rate ?? 0, mistakes: ui.mistakes };
+        const buildSection = (subject, band, ui, agg) => {
+          if (band == null && (agg == null || agg.total === 0) && ui.mistakes.length === 0) return null;
+          const out = { band, correctRate: agg && agg.total > 0 ? agg.correct / agg.total : 0, mistakes: ui.mistakes };
           if (ui.partStats) out.partStats = ui.partStats;
-          if (out.correctRate === 0 && ui.partStats) {
-            const agg = aggregatePartStats(subject, ui.partStats);
-            if (agg.total > 0) out.correctRate = agg.correct / agg.total;
-          }
           return out;
         };
 
@@ -353,8 +348,8 @@ export function renderIelts(root) {
           date: dateInput.value || todayStr(),
           paper: paperInput.value.trim(),
           mode: modeSelect.value,
-          listening: listeningOk ? buildSection('listening', lb, listening) : null,
-          reading: readingOk ? buildSection('reading', rb, reading) : null,
+          listening: listeningOk ? buildSection('listening', lb, listening, listeningAgg) : null,
+          reading: readingOk ? buildSection('reading', rb, reading, readingAgg) : null,
           writing: selVal(W),
           speaking: selVal(S),
           overall: selVal(O),
@@ -634,12 +629,6 @@ export function renderIelts(root) {
       ]);
       const chips = el('div', { className: 'mistake-chips' }, [
         mistake.tag ? el('span', { className: 'badge', text: mistake.tag }) : null,
-        mistake.understood !== '' && mistake.understood != null
-          ? el('span', {
-              className: `badge ${mistake.understood === '1' ? 'accent' : mistake.understood === '0.5' ? 'warn' : 'muted'}`,
-              text: ({'1':'全懂','0.5':'半懂','0':'蒙的'})[mistake.understood] || mistake.understood,
-            })
-          : null,
       ]);
       const body = el('div', { className: 'mistake-body' }, [
         el('div', { className: 'mistake-text', text: parts.join(' · ') || mistake.note || '(空)' }),
@@ -720,8 +709,6 @@ export function renderIelts(root) {
     const reason = el('textarea', { rows: 3 }); reason.value = mistake.reason || '';
     const tag = el('select', {}, [el('option', { value: '', text: '错因类型' }), ...tagOptions.map((t) => el('option', { value: t, text: t }))]);
     tag.value = mistake.tag || '';
-    const ud = el('select', {}, [el('option', { value: '', text: '听懂程度' }), ...UNDERSTOOD_OPTIONS.map((o) => el('option', { value: o.value, text: o.text }))]);
-    ud.value = mistake.understood == null ? '' : String(mistake.understood);
     const note = el('input', { type: 'text', value: mistake.note || '' });
 
     const isReview = mode === 'review';
@@ -737,17 +724,15 @@ export function renderIelts(root) {
       mkRow('同替', sub),
       mkRow('错因', reason),
       mkRow('错因类型', tag),
-      mkRow('听懂程度（复盘时改）', ud),
       mkRow('备注', note),
     ]);
 
     modal({
       title: `${item.paper || '未命名'} · ${SUBJECT_LABEL[subject]}${isReview ? ' · 复盘' : ' · 编辑错题'}`,
       body,
-      confirmText: isReview ? '保存听懂程度' : '保存',
+      confirmText: isReview ? '保存' : '保存',
     }).then((ok) => {
       if (!ok) return;
-      // understood may legitimately be the string '0' (没懂) — must not fall back to ''
       upsertMistake(item.id, subject, mistake.id, {
         part: partSel.value || null,
         ans: ans.value.trim(),
@@ -755,7 +740,6 @@ export function renderIelts(root) {
         sub: sub.value.trim(),
         reason: reason.value.trim(),
         tag: tag.value,
-        understood: ud.value === '' ? '' : String(ud.value),
         note: note.value.trim(),
       });
       toast('已保存', 'success');
@@ -920,6 +904,14 @@ export function renderIelts(root) {
       sel.value = value != null ? Number(value).toFixed(1) : '';
       return el('div', { className: 'form-row' }, [el('label', { text: label }), sel]);
     };
+    const modeSelect = el('select', {}, [
+      el('option', { value: 'full', text: '全套' }),
+      el('option', { value: 'listening', text: '听力' }),
+      el('option', { value: 'reading', text: '阅读' }),
+      el('option', { value: 'writing', text: '写作' }),
+      el('option', { value: 'speaking', text: '口语' }),
+    ]);
+    modeSelect.value = item.mode || 'full';
     const dateIn = el('input', { type: 'date', value: item.date || todayStr() });
     const paperIn = el('input', { type: 'text', value: item.paper || '', autocomplete: 'off' });
     const listeningBand = mk('listeningBand', 'Listening', bandOf(item.listening));
@@ -928,6 +920,8 @@ export function renderIelts(root) {
     const speakingIn = mk('speaking', 'Speaking', bandOf(item.speaking));
     const overallIn = mk('overall', 'Overall', bandOf(item.overall));
     const notesIn = el('textarea', { rows: 2 }); notesIn.value = item.notes || '';
+    const listeningUI = buildSubjectForm('listening', item.listening);
+    const readingUI = buildSubjectForm('reading', item.reading);
 
     modal({
       title: '编辑成绩',
@@ -935,11 +929,12 @@ export function renderIelts(root) {
         el('div', { className: 'form-row inline' }, [
           el('div', { className: 'form-row' }, [el('label', { text: '日期' }), dateIn]),
           el('div', { className: 'form-row' }, [el('label', { text: '试卷' }), paperIn]),
+          el('div', { className: 'form-row' }, [el('label', { text: '模式' }), modeSelect]),
         ]),
         el('div', { className: 'form-row inline' }, [listeningBand, readingBand]),
         el('div', { className: 'form-row inline' }, [writingIn, speakingIn, overallIn]),
+        el('div', { className: 'subscore-grid' }, [listeningUI.container, readingUI.container]),
         el('div', { className: 'form-row' }, [el('label', { text: '备注' }), notesIn]),
-        el('p', { className: 'help', text: '分 Part 明细与错题请在「录入」或「错题本」里编辑。' }),
       ]),
       confirmText: '保存',
     }).then((ok) => {
@@ -950,23 +945,40 @@ export function renderIelts(root) {
       };
       const lb = parse(listeningBand);
       const rb = parse(readingBand);
-      // 保留 partStats / mistakes 等明细，只更新 band
-      const withBand = (sec, band) => {
-        if (band == null) return sec ?? null;
-        if (sec != null && typeof sec === 'object') return { ...sec, band };
-        if (typeof sec === 'number') return band;
-        return { band, correctRate: 0, mistakes: [], partStats: null };
+      const listening = listeningUI.read();
+      const reading = readingUI.read();
+      const listeningAgg = listening.partStats ? aggregatePartStats('listening', listening.partStats) : null;
+      const readingAgg = reading.partStats ? aggregatePartStats('reading', reading.partStats) : null;
+      const buildSection = (subject, band, ui, agg) => {
+        if (band == null && (agg == null || agg.total === 0) && ui.mistakes.length === 0) return null;
+        const out = { band, correctRate: agg && agg.total > 0 ? agg.correct / agg.total : 0, mistakes: ui.mistakes };
+        if (ui.partStats) out.partStats = ui.partStats;
+        return out;
       };
-      updateIelts(item.id, {
+      const next = {
         date: dateIn.value || todayStr(),
         paper: paperIn.value.trim(),
-        listening: withBand(item.listening, lb),
-        reading: withBand(item.reading, rb),
+        mode: modeSelect.value,
+        listening: buildSection('listening', lb, listening, listeningAgg),
+        reading: buildSection('reading', rb, reading, readingAgg),
         writing: parse(writingIn),
         speaking: parse(speakingIn),
         overall: parse(overallIn),
         notes: notesIn.value.trim(),
-      });
+      };
+      if (next.mode === 'full' && next.overall == null) {
+        next.overall = computeOverall(lb, rb, next.writing, next.speaking);
+      }
+      // 填了 partStats 但没填 band 时 -> 由 raw 数换 band
+      if (next.listening && next.listening.band == null && next.listening.partStats) {
+        const agg = aggregatePartStats('listening', next.listening.partStats);
+        if (agg.total >= 35 && agg.total <= 45) next.listening.band = bandFromRaw('listening', agg.correct);
+      }
+      if (next.reading && next.reading.band == null && next.reading.partStats) {
+        const agg = aggregatePartStats('reading', next.reading.partStats);
+        if (agg.total >= 35 && agg.total <= 45) next.reading.band = bandFromRaw('reading', agg.correct);
+      }
+      updateIelts(item.id, next);
       toast('已保存', 'success');
       paintBody();
     });

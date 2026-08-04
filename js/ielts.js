@@ -103,7 +103,7 @@ export function correctRatePct(v) {
 /**
  * Normalize one mistake: accepts legacy string or rich object.
  * @returns {null | {id:string, part:number|null, ans:string, orig:string, sub:string,
- *            reason:string, tag:string, understood:string, note:string,
+ *            reason:string, tag:string, note:string,
  *            createdAt:string}}
  */
 export function normalizeMistake(m, defaultPart = null) {
@@ -122,7 +122,6 @@ export function normalizeMistake(m, defaultPart = null) {
       sub: '',
       reason: '',
       tag: '',
-      understood: '',
       note: '',
       createdAt: '',
     };
@@ -136,7 +135,6 @@ export function normalizeMistake(m, defaultPart = null) {
     sub: String(m.sub ?? '').trim(),
     reason: String(m.reason ?? '').trim(),
     tag: String(m.tag ?? '').trim(),
-    understood: String(m.understood ?? '').trim(),
     note: String(m.note ?? '').trim(),
     createdAt: m.createdAt || '',
   };
@@ -259,11 +257,6 @@ function iso(d) {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/* ---- mistake tags / understood options ---- */
+/* ---- mistake tags ---- */
 export const MISTAKE_TAGS = ['定位错误', '同替没听出', '词汇量不足', '连读吞音', '多选漏选', '粗心', '时间不够', '其他'];
 export const QUESTION_TAGS_READING = ['定位错误', 'T/F/NG 混淆', '同义替换', '长难句', '段落主旨', '时间不够', '粗心', '其他'];
-export const UNDERSTOOD_OPTIONS = [
-  { value: '1', text: '完全听懂 / 看懂' },
-  { value: '0.5', text: '半懂 / 靠运气' },
-  { value: '0', text: '没听懂 / 蒙的' },
-];

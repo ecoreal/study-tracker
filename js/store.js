@@ -357,7 +357,7 @@ function normalizeMistakeLocal(m) {
   if (typeof m === 'string') {
     const ans = m.trim();
     if (!ans) return null;
-    return { id: '', part: null, ans, orig: '', sub: '', reason: '', tag: '', understood: '', note: '', createdAt: '' };
+    return { id: '', part: null, ans, orig: '', sub: '', reason: '', tag: '', note: '', createdAt: '' };
   }
   if (m == null || typeof m !== 'object') return null;
   return {
@@ -368,7 +368,6 @@ function normalizeMistakeLocal(m) {
     sub: String(m.sub ?? '').trim(),
     reason: String(m.reason ?? '').trim(),
     tag: String(m.tag ?? '').trim(),
-    understood: String(m.understood ?? '').trim(),
     note: String(m.note ?? '').trim(),
     createdAt: m.createdAt || '',
   };
