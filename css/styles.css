@@ -1239,6 +1239,8 @@ textarea {
 }
 
 .modal-panel {
+  /* 默认居中，拖拽后改为 left/top 定位 */
+  position: relative;
   width: min(440px, 100%);
   max-height: min(85vh, 720px);
   overflow-y: auto;
@@ -1249,6 +1251,23 @@ textarea {
   padding: calc(16px * var(--space-unit));
   animation: fadeIn 0.18s ease;
   overscroll-behavior: contain;
+  transition: opacity 0.15s ease;
+}
+
+/* 尺寸档位 */
+.modal-sm { width: min(360px, 100%); }
+.modal-md { width: min(440px, 100%); }
+.modal-lg { width: min(640px, 100%); }
+.modal-xl { width: min(860px, calc(100vw - 32px)); }
+
+.modal-dragging {
+  user-select: none;
+  transition: none;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-dragging .modal-body {
+  pointer-events: none;
 }
 
 .modal-header {
@@ -1261,11 +1280,24 @@ textarea {
   top: 0;
   background: var(--bg-elevated);
   z-index: 1;
+  border-radius: calc(var(--radius) * var(--radius-scale) - 4px) calc(var(--radius) * var(--radius-scale) - 4px) 0 0;
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.05rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .modal-body {
@@ -1788,4 +1820,80 @@ textarea {
   .band-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* =====================================================
+ * 全站体验优化
+ * ===================================================== */
+
+/* 导航图标 */
+.nav-ico {
+  font-size: 1.05em;
+  line-height: 1;
+  margin-right: 2px;
+}
+
+/* 细滚动条（桌面端） */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* 视图切换过渡 */
+.view-root {
+  animation: fadeIn 0.22s ease;
+}
+
+/* 卡片 hover 微交互（桌面端） */
+@media (pointer: fine) {
+  .card {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  }
+  .card:hover {
+    border-color: color-mix(in srgb, var(--accent-var) 25%, var(--border));
+  }
+}
+
+/* 空状态更友好 */
+.empty {
+  line-height: 1.6;
+}
+
+/* 表单在窄屏的 label 字号 */
+@media (max-width: 480px) {
+  label {
+    font-size: 0.8rem;
+  }
+}
+
+/* 键盘可达性：全局焦点环 */
+:focus-visible {
+  outline: 2px solid var(--accent-var);
+  outline-offset: 2px;
+}
+
+/* 选择控件在移动端高度一致 */
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
 }

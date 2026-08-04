@@ -57,23 +57,40 @@ export function dateInputValue(d = new Date()) {
 }
 
 /**
- * Simple modal dialog.
- * @param {{ title: string, body: HTMLElement|HTMLElement[], confirmText?: string, cancelText?: string, danger?: boolean }} opts
+ * Modal dialog — 支持拖拽、尺寸档位、位置记忆。
+ * @param {{
+ *   title: string,
+ *   body: HTMLElement|HTMLElement[],
+ *   confirmText?: string,
+ *   cancelText?: string,
+ *   danger?: boolean,
+ *   size?: 'sm'|'md'|'lg'|'xl',   // 默认 md(440px)；lg=640px；xl=860px
+ *   draggable?: boolean,          // 默认 true
+ *   rememberPos?: boolean,        // 默认 true，记住拖动位置
+ * }} opts
  * @returns {Promise<boolean>} true if confirmed
  */
-export function modal(opts) {
+export function modal(opts = {}) {
   return new Promise((resolve) => {
+    const size = opts.size || 'md';
+    const draggable = opts.draggable !== false;
+    const rememberPos = opts.rememberPos !== false;
+    const posKey = `modal-pos:${opts.title || 'default'}`;
+    const savedPos = rememberPos ? (() => { try { return JSON.parse(localStorage.getItem(posKey) || 'null'); } catch { return null; } })() : null;
+
     const backdrop = el('div', { className: 'modal-backdrop', role: 'dialog', 'aria-modal': 'true' });
-    const panel = el('div', { className: 'modal-panel' }, [
-      el('div', { className: 'modal-header' }, [
+    const panel = el('div', { className: `modal-panel modal-${size}` }, [
+      el('div', { className: 'modal-header', dataset: { drag: 'handle' } }, [
         el('h3', { text: opts.title || '提示' }),
-        el('button', {
-          type: 'button',
-          className: 'btn btn-ghost btn-icon btn-sm',
-          'aria-label': '关闭',
-          text: '×',
-          onClick: () => close(false),
-        }),
+        el('div', { className: 'modal-header-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost btn-icon btn-sm',
+            'aria-label': '关闭',
+            text: '×',
+            onClick: () => close(false),
+          }),
+        ]),
       ]),
       el('div', { className: 'modal-body' }, [].concat(opts.body || [])),
       el('div', { className: 'modal-footer btn-row' }, [
@@ -94,6 +111,55 @@ export function modal(opts) {
     backdrop.append(panel);
     document.body.append(backdrop);
     requestAnimationFrame(() => backdrop.classList.add('show'));
+
+    // ——— 拖拽（仅桌面端，触屏设备跳过） ———
+    // 桌面端（宽视口）启用拖拽；移动端保持底部弹层
+    if (draggable && window.innerWidth >= 768) {
+      let drag = null;
+      const header = panel.querySelector('[data-drag="handle"]');
+      header.style.cursor = 'grab';
+      header.title = '按住拖动窗口';
+      header.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        drag = { dx: e.clientX - panel.offsetLeft, dy: e.clientY - panel.offsetTop };
+        header.setPointerCapture(e.pointerId);
+        header.style.cursor = 'grabbing';
+        panel.classList.add('modal-dragging');
+        e.preventDefault();
+      });
+      header.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const pw = panel.offsetWidth;
+        const ph = panel.offsetHeight;
+        const x = Math.min(Math.max(0, e.clientX - drag.dx), vw - pw);
+        const y = Math.min(Math.max(0, e.clientY - drag.dy), vh - ph * 0.3);
+        panel.style.left = `${x}px`;
+        panel.style.top = `${y}px`;
+        panel.style.margin = '0';
+      });
+      const endDrag = (e) => {
+        if (!drag) return;
+        drag = null;
+        header.style.cursor = 'grab';
+        panel.classList.remove('modal-dragging');
+        if (rememberPos) {
+          try {
+            localStorage.setItem(posKey, JSON.stringify({ left: panel.style.left, top: panel.style.top }));
+          } catch { /* ignore */ }
+        }
+      };
+      header.addEventListener('pointerup', endDrag);
+      header.addEventListener('pointercancel', endDrag);
+    }
+
+    // 恢复保存的位置
+    if (savedPos && savedPos.left && savedPos.top) {
+      panel.style.left = savedPos.left;
+      panel.style.top = savedPos.top;
+      panel.style.margin = '0';
+    }
 
     function onKey(e) {
       if (e.key === 'Escape') close(false);

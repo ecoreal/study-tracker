@@ -732,6 +732,7 @@ export function renderIelts(root) {
 
     modal({
       title: `${item.paper || '未命名'} · ${SUBJECT_LABEL[subject]}${isReview ? ' · 复盘' : ' · 编辑错题'}`,
+      size: 'lg',
       body,
       confirmText: isReview ? '保存' : '保存',
     }).then((ok) => {
@@ -928,6 +929,7 @@ export function renderIelts(root) {
 
     modal({
       title: '编辑成绩',
+      size: 'lg',
       body: el('div', { className: 'form-grid' }, [
         el('div', { className: 'form-row inline' }, [
           el('div', { className: 'form-row' }, [el('label', { text: '日期' }), dateIn]),
