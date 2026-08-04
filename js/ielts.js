@@ -8,15 +8,21 @@ export const PART_QUESTIONS = {
   reading: [13, 13, 14],
 };
 
-/** 40 raw correct -> approximate IELTS band (Academic). */
+/** 40 raw correct -> IELTS band score (official table). */
 export const LISTENING_RAW_TO_BAND = [
-  0, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5, 5, 5.5, 5.5, 5.5, 5.5, 6, 6, 6, 6.5, 6.5,
-  6.5, 6.5, 7, 7, 7, 7, 7.5, 7.5, 7.5, 7.5, 8, 8, 8, 8.5, 8.5, 8.5, 8.5, 9, 9,
-  9,
+  0, 1, 2, 2.5, 3, 3, 3.5, 3.5, 3.5, 3.5, 4, 4, 4, 4.5, 4.5, 4.5, 5, 5, 5, 5,
+  5.5, 5.5, 5.5, 6, 6, 6, 6, 6.5, 6.5, 6.5, 7, 7, 7, 7.5, 7.5, 8, 8, 8.5, 8.5,
+  9, 9,
 ];
 export const READING_AC_RAW_TO_BAND = [
-  0, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5, 5, 5.5, 5.5, 6, 6, 6, 6.5, 6.5, 6.5,
-  7, 7, 7, 7.5, 7.5, 7.5, 7.5, 8, 8, 8, 8, 8.5, 8.5, 8.5, 9, 9, 9, 9, 9,
+  0, 1, 2, 2.5, 3, 3, 3.5, 3.5, 3.5, 3.5, 4, 4, 4, 4.5, 4.5, 4.5, 5, 5, 5, 5,
+  5.5, 5.5, 5.5, 6, 6, 6, 6, 6.5, 6.5, 6.5, 7, 7, 7, 7.5, 7.5, 8, 8, 8.5, 8.5,
+  9, 9,
+];
+export const READING_GT_RAW_TO_BAND = [
+  0, 1, 2, 2, 2, 2.5, 2.5, 2.5, 3, 3, 3, 3, 3.5, 3.5, 3.5, 4, 4, 4, 4, 4.5,
+  4.5, 4.5, 4.5, 5, 5, 5, 5.5, 5.5, 5.5, 5.5, 6, 6, 6.5, 6.5, 7, 7, 7.5, 7.5,
+  8, 8.5, 9,
 ];
 
 export function roundBand(n) {
@@ -43,7 +49,11 @@ export function computeOverall(listening, reading, writing, speaking) {
 
 /** Estimate single-skill band from 40-question raw correct count. */
 export function bandFromRaw(subject, correctCount) {
-  const map = subject === 'reading' ? READING_AC_RAW_TO_BAND : LISTENING_RAW_TO_BAND;
+  const map = subject === 'reading'
+    ? READING_AC_RAW_TO_BAND
+    : subject === 'reading-gt'
+      ? READING_GT_RAW_TO_BAND
+      : LISTENING_RAW_TO_BAND;
   const n = Math.min(map.length - 1, Math.max(0, Math.round(Number(correctCount) || 0)));
   return map[n];
 }
@@ -51,7 +61,11 @@ export function bandFromRaw(subject, correctCount) {
 /** Approximate required correct rate (over TOTAL questions) for a given target band. */
 export function requiredRateForBand(subject, targetBand) {
   if (targetBand == null || Number.isNaN(Number(targetBand))) return null;
-  const map = subject === 'reading' ? READING_AC_RAW_TO_BAND : LISTENING_RAW_TO_BAND;
+  const map = subject === 'reading'
+    ? READING_AC_RAW_TO_BAND
+    : subject === 'reading-gt'
+      ? READING_GT_RAW_TO_BAND
+      : LISTENING_RAW_TO_BAND;
   const target = Number(targetBand);
   const total = map.length - 1; // 40 questions per paper
   for (let i = 0; i < map.length; i += 1) {

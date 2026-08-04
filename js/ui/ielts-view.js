@@ -28,6 +28,7 @@ import {
   QUESTION_TAGS_READING,
   LISTENING_RAW_TO_BAND,
   READING_AC_RAW_TO_BAND,
+  READING_GT_RAW_TO_BAND,
 } from '../ielts.js';
 
 const SUBJECT_LABEL = { listening: '听力', reading: '阅读' };
@@ -795,24 +796,19 @@ export function renderIelts(root) {
     };
     const Lmap = bandMap(LISTENING_RAW_TO_BAND);
     const Rmap = bandMap(READING_AC_RAW_TO_BAND);
+    const GTmap = bandMap(READING_GT_RAW_TO_BAND);
     const Lbands = Object.keys(Lmap).map(Number).sort((a, b) => b - a);
     const Rbands = Object.keys(Rmap).map(Number).sort((a, b) => b - a);
+    const GTbands = Object.keys(GTmap).map(Number).sort((a, b) => b - a);
 
-    const rangeText = (band, raw, map) => {
-      const list = map[band];
-      const min = Math.min(...list);
-      const max = Math.max(...list);
-      return min === max ? `${min} 题` : `${min}~${max} 题`;
-    };
-
-    const row = (band, map, subject, highlightRaw) => {
+    const row = (band, map, highlightRaw) => {
       const list = map[band];
       const min = Math.min(...list);
       const max = Math.max(...list);
       const isMine = highlightRaw != null && highlightRaw >= min && highlightRaw <= max;
       return el('tr', { className: isMine ? 'band-row-mine' : '' }, [
         el('td', { className: 'band-cell', text: band.toFixed(1) }),
-        el('td', { text: rangeText(band, null, map) }),
+        el('td', { text: min === max ? `${min} 题` : `${min}~${max} 题` }),
         el('td', { className: 'band-raw' }, [
           el('span', { className: 'band-raw-dots', text: '●'.repeat(Math.max(1, Math.round((max - min + 1) / 4))) }),
           isMine ? el('span', { className: 'badge', text: '最近成绩' }) : null,
@@ -820,12 +816,12 @@ export function renderIelts(root) {
       ]);
     };
 
-    const table = (subject, title, map, bands, highlightRaw) => el('div', { className: 'card band-table-card' }, [
+    const table = (title, note, map, bands, highlightRaw) => el('div', { className: 'card band-table-card' }, [
       el('div', { className: 'card-header' }, [
         el('h3', { text: title }),
         el('span', { className: 'badge', text: '共 40 题' }),
       ]),
-      el('p', { className: 'help', text: subject === 'listening' ? '听力（Academic）对题数 → 分数' : '阅读（Academic）对题数 → 分数' }),
+      el('p', { className: 'help', text: note }),
       el('div', { className: 'goal-table-wrap' }, [
         el('table', { className: 'goal-table band-table' }, [
           el('thead', {}, [
@@ -835,7 +831,7 @@ export function renderIelts(root) {
               el('th', { text: '分布' }),
             ]),
           ]),
-          el('tbody', {}, bands.map((b) => row(b, map, subject, highlightRaw))),
+          el('tbody', {}, bands.map((b) => row(b, map, highlightRaw))),
         ]),
       ]),
     ]);
@@ -845,12 +841,13 @@ export function renderIelts(root) {
         el('div', { className: 'view-header' }, [
           el('div', {}, [
             el('h2', { text: '雅思分段表' }),
-            el('p', { text: '听力 / 阅读各答对多少题，对应多少分（Academic 40 题）。' }),
+            el('p', { text: '听力 / 阅读（A / G）各答对多少题，对应多少分（官方 40 题标准）。' }),
           ]),
         ]),
         el('div', { className: 'band-grid' }, [
-          table('listening', '听力', Lmap, Lbands, lastLCorrect),
-          table('reading', '阅读', Rmap, Rbands, lastRCorrect),
+          table('听力', 'Listening · Academic', Lmap, Lbands, lastLCorrect),
+          table('阅读 · Academic', 'Reading · Academic', Rmap, Rbands, lastRCorrect),
+          table('阅读 · General Training', 'Reading · General Training', GTmap, GTbands, null),
         ]),
         el('p', { className: 'help', style: { textAlign: 'center' } }, [
           '最近一次成绩会自动高亮显示。',
