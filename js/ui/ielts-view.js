@@ -204,8 +204,11 @@ export function renderIelts(root) {
         const partStats = {};
         partInputs.forEach((inp, i) => {
           const t = Number(inp.total.value);
-          const c = Number(inp.correct.value);
-          if (Number.isFinite(t) && Number.isFinite(c) && t > 0) {
+          const cRaw = inp.correct.value.trim();
+          // 只有明确填写"对题数"的 Part 才计入统计，避免空值稀释正确率
+          if (cRaw === '' || !Number.isFinite(t) || t <= 0) return;
+          const c = Number(cRaw);
+          if (Number.isFinite(c)) {
             partStats[String(i + 1)] = { total: t, correct: Math.min(t, c) };
           }
         });
