@@ -786,6 +786,9 @@ export function renderIelts(root) {
       ? READING_AC_RAW_TO_BAND.indexOf(Math.round(lastR * 2) / 2)
       : null;
 
+    // 考试类型：默认 Academic（用户考试目标）
+    let examType = 'academic'; // academic | general
+
     const bandMap = (arr) => {
       const map = {};
       arr.forEach((band, raw) => {
@@ -836,19 +839,54 @@ export function renderIelts(root) {
       ]),
     ]);
 
+    const grid = el('div', { className: 'band-grid' });
+    const typeTabs = el('div', { className: 'btn-row band-type-tabs' }, [
+      typeBtn('academic', 'Academic'),
+      typeBtn('general', 'General Training'),
+    ]);
+
+    function typeBtn(key, label) {
+      return el('button', {
+        type: 'button',
+        className: `btn btn-sm btn-ghost${examType === key ? ' btn-primary' : ''}`,
+        dataset: { type: key },
+        text: label,
+        onClick: () => {
+          examType = key;
+          typeTabs.querySelectorAll('button').forEach((b) => {
+            b.className = `btn btn-sm btn-ghost${b.dataset.type === examType ? ' btn-primary' : ''}`;
+          });
+          paintGrid();
+        },
+      });
+    }
+
+    function paintGrid() {
+      grid.replaceChildren();
+      if (examType === 'academic') {
+        grid.append(
+          table('听力', 'Listening · Academic', Lmap, Lbands, lastLCorrect),
+          table('阅读 · Academic', 'Reading · Academic', Rmap, Rbands, lastRCorrect),
+        );
+      } else {
+        grid.append(
+          table('听力', 'Listening（与 Academic 相同）', Lmap, Lbands, lastLCorrect),
+          table('阅读 · General Training', 'Reading · General Training', GTmap, GTbands, null),
+        );
+      }
+    }
+    paintGrid();
+
     container.append(
       el('section', { className: 'view' }, [
         el('div', { className: 'view-header' }, [
           el('div', {}, [
             el('h2', { text: '雅思分段表' }),
-            el('p', { text: '听力 / 阅读（A / G）各答对多少题，对应多少分（官方 40 题标准）。' }),
+            el('p', { text: '听力 / 阅读各答对多少题，对应多少分（官方 40 题标准）。' }),
           ]),
         ]),
-        el('div', { className: 'band-grid' }, [
-          table('听力', 'Listening · Academic', Lmap, Lbands, lastLCorrect),
-          table('阅读 · Academic', 'Reading · Academic', Rmap, Rbands, lastRCorrect),
-          table('阅读 · General Training', 'Reading · General Training', GTmap, GTbands, null),
-        ]),
+        typeTabs,
+        grid,
         el('p', { className: 'help', style: { textAlign: 'center' } }, [
           '最近一次成绩会自动高亮显示。',
           lastL != null ? ` 你最近听力 ${formatBand(lastL)}，阅读 ${formatBand(lastR)}。` : ' 录入成绩后这里会显示你的位置。',

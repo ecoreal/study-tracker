@@ -1959,3 +1959,13 @@ select {
 .band-row-mine .badge {
   margin-left: 6px;
 }
+
+/* 分段表考试类型切换 */
+.band-type-tabs {
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.band-type-tabs .btn {
+  min-width: 120px;
+}
