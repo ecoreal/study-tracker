@@ -1897,3 +1897,65 @@ select {
   background-repeat: no-repeat;
   padding-right: 28px;
 }
+
+/* =====================================================
+ * 雅思分段表
+ * ===================================================== */
+.band-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .band-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.band-table-card {
+  min-width: 0;
+}
+
+.band-table {
+  width: 100%;
+}
+
+.band-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.band-table th {
+  text-align: center;
+}
+
+.band-cell {
+  font-weight: 700;
+  color: var(--accent-var);
+}
+
+.band-raw {
+  position: relative;
+}
+
+.band-raw-dots {
+  color: var(--accent-soft-var);
+  letter-spacing: 2px;
+  font-size: 0.7rem;
+}
+
+.band-row-mine {
+  background: var(--accent-soft-var);
+}
+
+.band-row-mine .band-cell {
+  color: var(--accent-var);
+}
+
+.band-row-mine .badge {
+  margin-left: 6px;
+}

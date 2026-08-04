@@ -26,6 +26,8 @@ import {
   PART_QUESTIONS,
   MISTAKE_TAGS,
   QUESTION_TAGS_READING,
+  LISTENING_RAW_TO_BAND,
+  READING_AC_RAW_TO_BAND,
 } from '../ielts.js';
 
 const SUBJECT_LABEL = { listening: '听力', reading: '阅读' };
@@ -41,6 +43,7 @@ export function renderIelts(root) {
     tabBtn('analysis', '学习分析'),
     tabBtn('mistakes', '错题本'),
     tabBtn('records', '记录'),
+    tabBtn('bandtable', '分段表'),
   ]);
   const bodyWrap = el('div');
 
@@ -68,6 +71,7 @@ export function renderIelts(root) {
     if (activeTab === 'form') renderForm(bodyWrap);
     else if (activeTab === 'analysis') renderAnalysis(bodyWrap);
     else if (activeTab === 'mistakes') renderMistakes(bodyWrap);
+    else if (activeTab === 'bandtable') renderBandTable(bodyWrap);
     else renderRecords(bodyWrap);
   }
 
@@ -82,7 +86,7 @@ export function renderIelts(root) {
   root.append(viewRoot);
   // 允许通过 URL hash 直达 sub-tab：#ielts=analysis / mistakes / records
   const hashSub = (location.hash || '').match(/ielts=([a-z]+)/);
-  if (hashSub && ['form', 'analysis', 'mistakes', 'records'].includes(hashSub[1])) {
+  if (hashSub && ['form', 'analysis', 'mistakes', 'records', 'bandtable'].includes(hashSub[1])) {
     activeTab = hashSub[1];
     tabsWrap.querySelectorAll('button').forEach((b) => {
       b.classList.toggle('active', b.dataset.tab === activeTab);
@@ -763,6 +767,97 @@ export function renderIelts(root) {
     const merged = { ...(normalizeMistake(list[idx]) || {}), ...patch };
     list[idx] = merged;
     updateIelts(itemId, { [subject]: sec });
+  }
+
+  /* =========================
+   * Tab 5: 分段表（听力/阅读 对题数 → 分数）
+   * ========================= */
+  function renderBandTable(container) {
+    const data = getData();
+    const last = data.ielts[0];
+    // 以最近一次成绩的 band 为准高亮对应题数区间
+    const lastL = last ? bandOf(last.listening) : null;
+    const lastR = last ? bandOf(last.reading) : null;
+    const lastLCorrect = lastL != null
+      ? LISTENING_RAW_TO_BAND.indexOf(Math.round(lastL * 2) / 2)
+      : null;
+    const lastRCorrect = lastR != null
+      ? READING_AC_RAW_TO_BAND.indexOf(Math.round(lastR * 2) / 2)
+      : null;
+
+    const bandMap = (arr) => {
+      const map = {};
+      arr.forEach((band, raw) => {
+        if (!map[band]) map[band] = [];
+        map[band].push(raw);
+      });
+      return map;
+    };
+    const Lmap = bandMap(LISTENING_RAW_TO_BAND);
+    const Rmap = bandMap(READING_AC_RAW_TO_BAND);
+    const Lbands = Object.keys(Lmap).map(Number).sort((a, b) => b - a);
+    const Rbands = Object.keys(Rmap).map(Number).sort((a, b) => b - a);
+
+    const rangeText = (band, raw, map) => {
+      const list = map[band];
+      const min = Math.min(...list);
+      const max = Math.max(...list);
+      return min === max ? `${min} 题` : `${min}~${max} 题`;
+    };
+
+    const row = (band, map, subject, highlightRaw) => {
+      const list = map[band];
+      const min = Math.min(...list);
+      const max = Math.max(...list);
+      const isMine = highlightRaw != null && highlightRaw >= min && highlightRaw <= max;
+      return el('tr', { className: isMine ? 'band-row-mine' : '' }, [
+        el('td', { className: 'band-cell', text: band.toFixed(1) }),
+        el('td', { text: rangeText(band, null, map) }),
+        el('td', { className: 'band-raw' }, [
+          el('span', { className: 'band-raw-dots', text: '●'.repeat(Math.max(1, Math.round((max - min + 1) / 4))) }),
+          isMine ? el('span', { className: 'badge', text: '最近成绩' }) : null,
+        ]),
+      ]);
+    };
+
+    const table = (subject, title, map, bands, highlightRaw) => el('div', { className: 'card band-table-card' }, [
+      el('div', { className: 'card-header' }, [
+        el('h3', { text: title }),
+        el('span', { className: 'badge', text: '共 40 题' }),
+      ]),
+      el('p', { className: 'help', text: subject === 'listening' ? '听力（Academic）对题数 → 分数' : '阅读（Academic）对题数 → 分数' }),
+      el('div', { className: 'goal-table-wrap' }, [
+        el('table', { className: 'goal-table band-table' }, [
+          el('thead', {}, [
+            el('tr', {}, [
+              el('th', { text: '分数' }),
+              el('th', { text: '对题数' }),
+              el('th', { text: '分布' }),
+            ]),
+          ]),
+          el('tbody', {}, bands.map((b) => row(b, map, subject, highlightRaw))),
+        ]),
+      ]),
+    ]);
+
+    container.append(
+      el('section', { className: 'view' }, [
+        el('div', { className: 'view-header' }, [
+          el('div', {}, [
+            el('h2', { text: '雅思分段表' }),
+            el('p', { text: '听力 / 阅读各答对多少题，对应多少分（Academic 40 题）。' }),
+          ]),
+        ]),
+        el('div', { className: 'band-grid' }, [
+          table('listening', '听力', Lmap, Lbands, lastLCorrect),
+          table('reading', '阅读', Rmap, Rbands, lastRCorrect),
+        ]),
+        el('p', { className: 'help', style: { textAlign: 'center' } }, [
+          '最近一次成绩会自动高亮显示。',
+          lastL != null ? ` 你最近听力 ${formatBand(lastL)}，阅读 ${formatBand(lastR)}。` : ' 录入成绩后这里会显示你的位置。',
+        ]),
+      ]),
+    );
   }
 
   /* =========================
