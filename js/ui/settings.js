@@ -9,7 +9,7 @@ import {
 } from '../store.js';
 import * as gist from '../gist.js';
 import * as pomodoro from '../pomodoro.js';
-import { applyTheme } from '../theme.js';
+import { applyTheme, applyAppearance } from '../theme.js';
 import { bandOptions } from '../ielts.js';
 
 /**
@@ -57,6 +57,30 @@ export function renderSettings(root, ctx) {
     el('option', { value: 'dark', text: '深色' }),
   ]);
   themeSelect.value = data.settings.theme || 'system';
+
+  const fontScaleSelect = el('select', {}, [
+    el('option', { value: 'small', text: '小' }),
+    el('option', { value: 'normal', text: '标准' }),
+    el('option', { value: 'large', text: '大' }),
+  ]);
+  fontScaleSelect.value = data.settings.fontScale || 'normal';
+
+  const densitySelect = el('select', {}, [
+    el('option', { value: 'compact', text: '紧凑' }),
+    el('option', { value: 'normal', text: '标准' }),
+    el('option', { value: 'roomy', text: '宽松' }),
+  ]);
+  densitySelect.value = data.settings.density || 'normal';
+
+  const accentSelect = el('select', {}, [
+    el('option', { value: 'teal', text: '青绿' }),
+    el('option', { value: 'blue', text: '蓝' }),
+    el('option', { value: 'violet', text: '紫' }),
+    el('option', { value: 'rose', text: '玫红' }),
+    el('option', { value: 'amber', text: '琥珀' }),
+    el('option', { value: 'green', text: '绿' }),
+  ]);
+  accentSelect.value = data.settings.accent || 'teal';
 
   const tokenIn = el('input', {
     type: 'password',
@@ -163,6 +187,11 @@ export function renderSettings(root, ctx) {
         field('科目标签', subjectsIn),
         el('p', { className: 'help', text: '用顿号「、」或逗号「,」分隔。' }),
         field('主题', themeSelect),
+        el('div', { className: 'form-row inline' }, [
+          field('字号', fontScaleSelect),
+          field('密度', densitySelect),
+          field('强调色', accentSelect),
+        ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
             type: 'button',
@@ -176,8 +205,16 @@ export function renderSettings(root, ctx) {
               updateSettings({
                 subjects: subjects.length ? subjects : ['雅思', '编程', '其他'],
                 theme: themeSelect.value,
+                fontScale: fontScaleSelect.value,
+                density: densitySelect.value,
+                accent: accentSelect.value,
               });
               applyTheme(themeSelect.value);
+              applyAppearance({
+                fontScale: fontScaleSelect.value,
+                density: densitySelect.value,
+                accent: accentSelect.value,
+              });
               toast('已保存', 'success');
             },
           }),

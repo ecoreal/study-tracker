@@ -1,6 +1,6 @@
 import { getData, subscribe, setOnChangeHook, updateSettings } from './store.js';
 import { schedulePush, initSync, subscribeSync } from './gist.js';
-import { applyTheme, toggleTheme, watchSystemTheme } from './theme.js';
+import { applyTheme, toggleTheme, watchSystemTheme, applyAppearance } from './theme.js';
 import { toast } from './ui/components.js';
 import { renderDashboard } from './ui/dashboard.js';
 import { renderTimer } from './ui/timer.js';
@@ -92,7 +92,10 @@ function queueRender() {
 
 function readHash() {
   const h = (location.hash || '').replace(/^#/, '');
+  // 支持子 tab 直达：如 #ielts=records → 雅思 → 记录
+  const base = h.split('=')[0];
   if (h && VIEWS[h]) currentView = h;
+  else if (base && VIEWS[base]) currentView = base;
   else currentView = 'dashboard';
 }
 
@@ -109,8 +112,9 @@ window.addEventListener('hashchange', () => {
   render();
 });
 
-// Theme
+// Theme & appearance
 applyTheme(getData().settings.theme || 'system');
+applyAppearance(getData().settings);
 watchSystemTheme(() => getData().settings.theme || 'system');
 themeBtn.addEventListener('click', () => {
   const next = toggleTheme(getData().settings.theme);

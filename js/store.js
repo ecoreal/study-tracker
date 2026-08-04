@@ -12,6 +12,9 @@ const DEFAULT_DATA = () => ({
     pomodoro: { focus: 25, shortBreak: 5, longBreak: 15, longEvery: 4 },
     subjects: ['雅思', '编程', '其他'],
     theme: 'system', // system | light | dark
+    fontScale: 'normal', // small | normal | large
+    density: 'normal', // compact | normal | roomy
+    accent: 'teal', // teal | blue | violet | rose | amber | green
     sound: true,
     autoStartNext: false, // 番茄结束后自动开始下一阶段
     dailyGoals: { focusMinutes: 120, focusCount: 4 },

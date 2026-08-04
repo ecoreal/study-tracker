@@ -382,7 +382,7 @@ export function renderIelts(root) {
         el('div', { className: 'form-row' }, [el('label', { text: '试卷' }), paperInput]),
         el('div', { className: 'form-row' }, [el('label', { text: '模式' }), modeSelect]),
       ]),
-      el('div', { className: 'form-row inline' }, [L, R, W, S, O]),
+      el('div', { className: 'form-row inline band-row' }, [L, R, W, S, O]),
       el('div', { className: 'subscore-grid' }, [listeningUI.container, readingUI.container]),
       el('div', { className: 'form-row' }, [el('label', { text: '备注' }), notes]),
       el('div', { className: 'btn-row' }, [

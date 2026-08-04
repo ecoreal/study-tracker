@@ -1,5 +1,5 @@
 /**
- * Theme: system | light | dark
+ * Theme & appearance: system | light | dark + font size + density + accent color
  */
 
 export function applyTheme(theme) {
@@ -25,4 +25,18 @@ export function watchSystemTheme(getTheme) {
   };
   if (mq.addEventListener) mq.addEventListener('change', handler);
   else mq.addListener(handler);
+}
+
+/**
+ * 应用外观设置：字号缩放 / 密度 / 强调色。
+ * @param {{ fontScale?: string, density?: string, accent?: string }} s
+ */
+export function applyAppearance(s = {}) {
+  const root = document.documentElement;
+  const font = s.fontScale || 'normal';
+  const density = s.density || 'normal';
+  const accent = s.accent || 'teal';
+  root.setAttribute('data-font-scale', font);
+  root.setAttribute('data-density', density);
+  root.setAttribute('data-accent', accent);
 }
