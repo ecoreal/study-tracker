@@ -26,15 +26,50 @@ export function el(tag, props = {}, children = []) {
   return node;
 }
 
+const TOAST_ICONS = {
+  info: 'ℹ️',
+  success: '✅',
+  error: '❌',
+  warn: '⚠️',
+};
+
+const MAX_TOASTS = 3;
+
 export function toast(message, type = 'info') {
   const root = document.getElementById('toast-root');
   if (!root) return;
-  const t = el('div', { className: `toast ${type}`, text: message });
+  // limit visible toasts
+  while (root.children.length >= MAX_TOASTS) {
+    const first = root.firstElementChild;
+    first.classList.add('out');
+    setTimeout(() => first.remove(), 200);
+  }
+  const icon = TOAST_ICONS[type] || '';
+  const t = el('div', { className: `toast ${type}` }, [
+    icon ? el('span', { className: 'toast-icon', text: icon }) : null,
+    el('span', { className: 'toast-text', text: message }),
+    el('button', {
+      type: 'button',
+      className: 'toast-close',
+      'aria-label': '关闭',
+      text: '×',
+      onClick: (e) => {
+        e.stopPropagation();
+        t.classList.add('out');
+        setTimeout(() => t.remove(), 200);
+      },
+    }),
+  ]);
   root.append(t);
+  // trigger reflow then add 'in' for animation
+  requestAnimationFrame(() => t.classList.add('in'));
   setTimeout(() => {
+    t.classList.remove('in');
     t.classList.add('out');
-    setTimeout(() => t.remove(), 200);
-  }, 2800);
+    setTimeout(() => {
+      if (t.parentNode) t.remove();
+    }, 200);
+  }, 3200);
 }
 
 export function clear(node) {
@@ -201,6 +236,21 @@ export async function promptModal({ title, label, value = '', placeholder = '', 
   const ok = await modal({ title, body, confirmText: '保存' });
   if (!ok) return null;
   return input.value;
+}
+
+/** Shorthand for a confirm dialog with just a message. */
+export function confirmModal({ title = '确认', message, confirmText = '确定', danger = false } = {}) {
+  return modal({
+    title,
+    body: el('p', { text: message }),
+    confirmText,
+    danger,
+  });
+}
+
+/** Standard form-row: label + control. */
+export function fieldRow(label, control) {
+  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
 }
 
 export function progressBar(ratio, { label = '', className = '' } = {}) {

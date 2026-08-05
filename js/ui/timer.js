@@ -1,5 +1,5 @@
-import { el, toast } from './components.js';
-import { getData, updateSettings } from '../store.js';
+import { el, toast, confirmModal } from './components.js';
+import { getData, updateSettings, todayStr } from '../store.js';
 import * as pomodoro from '../pomodoro.js';
 
 const FOCUS_PRESETS = [15, 25, 45, 50, 60, 90];
@@ -13,8 +13,7 @@ const LONG_PRESETS = [15, 20, 30, 45];
 export function renderTimer(root, ctx) {
   const data = getData();
   const p0 = data.settings.pomodoro;
-  const { todayStr } = awaitableToday();
-  const tasks = data.tasks.filter((t) => t.date === todayStr && !t.done);
+  const tasks = data.tasks.filter((t) => t.date === todayStr() && !t.done);
   const suppress = () => ctx.suppressTimerRerender && ctx.suppressTimerRerender();
 
   const ringWrap = el('div', { className: 'timer-ring-wrap' });
@@ -176,12 +175,17 @@ export function renderTimer(root, ctx) {
       type: 'button',
       className: 'btn btn-ghost',
       text: '跳过',
-      onClick: () => {
-        if (confirm('确定跳过当前阶段？已进行的专注可能仍会记入。')) {
+      onClick: async () => {
+          const ok = await confirmModal({
+            title: '跳过当前阶段',
+            message: '确定跳过当前阶段？已进行的专注可能仍会记入。',
+            confirmText: '跳过',
+            danger: true,
+          });
+          if (!ok) return;
           pomodoro.skip();
           syncDurationInputs();
-        }
-      },
+        },
     }),
   ]);
 
@@ -346,7 +350,7 @@ export function renderTimer(root, ctx) {
     const hint = side.querySelector('[data-role="focus-count-hint"]');
     if (hint) {
       const todayFocus = getData().sessions.filter(
-        (s) => s.date === todayStr && s.type === 'focus',
+        (s) => s.date === todayStr() && s.type === 'focus',
       ).length;
       hint.textContent = `今日记录 ${todayFocus} 个 · 本轮周期计数 ${st.focusCount}`;
     }
@@ -376,17 +380,11 @@ function minInput(value, min = 1, max = 180) {
   });
 }
 
-function field(label, control) {
-  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
-}
-
 function clamp(v, min, max, fallback) {
   const n = parseInt(v, 10);
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
-
-function awaitableToday() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

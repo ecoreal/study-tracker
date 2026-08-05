@@ -57,7 +57,7 @@ export function renderDashboard(root, ctx) {
 
       el('div', { className: 'grid-4' }, [
         stat('今日番茄', String(focus.count), `目标 ${countGoal} 个`),
-        stat('专注时长', `${focus.minutes}`, `目标 ${minGoal} 分钟`),
+        stat('专注时长', `${focus.minutes} 分`, focus.minutes ? `目标 ${minGoal} 分钟` : '目标 120 分钟'),
         stat(
           '待办完成',
           tasks.total ? `${tasks.done}/${tasks.total}` : '0',
@@ -65,6 +65,9 @@ export function renderDashboard(root, ctx) {
         ),
         stat('本周专注', `${weekTotal}`, '分钟'),
       ]),
+
+      /* 今日概览横幅 */
+      summaryBanner(data, today),
 
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
@@ -76,11 +79,14 @@ export function renderDashboard(root, ctx) {
             onClick: () => ctx.navigate('settings'),
           }),
         ]),
-        progressBar(focus.minutes / minGoal, {
+        focus.minutes > 0 || focus.count > 0
+          ? null
+          : el('p', { className: 'help', style: { marginBottom: '8px' }, text: '完成一个番茄钟，进度条就开始跑啦 🍅' }),
+        progressBar(focus.minutes > 0 ? focus.minutes / minGoal : 0, {
           label: `专注时长 ${focus.minutes} / ${minGoal} 分钟`,
         }),
         el('div', { style: { height: '10px' } }),
-        progressBar(focus.count / countGoal, {
+        progressBar(focus.count > 0 ? focus.count / countGoal : 0, {
           label: `完成番茄 ${focus.count} / ${countGoal} 个`,
         }),
       ]),
@@ -198,7 +204,7 @@ export function renderDashboard(root, ctx) {
             ])
             : el('div', {
               className: 'empty soft',
-              text: '还没有雅思成绩，做完真题来记一笔',
+              text: '还没有雅思成绩，做完真题来写一笔 ✍️',
             }),
         ]),
       ]),
@@ -360,4 +366,29 @@ function miniWeekBars(week) {
       ]);
     }),
   );
+}
+
+function summaryBanner(data, today) {
+  const taskCount = data.tasks.filter((t) => t.date === today && t.done).length;
+  const logCount = data.logs.filter((l) => l.date === today).length;
+  const ieltsCount = data.ielts.filter((i) => i.date === today).length;
+  const focusCount = data.sessions.filter((s) => s.date === today && s.type === 'focus').length;
+  const parts = [];
+  if (focusCount) parts.push(`🍅 ${focusCount} 个番茄`);
+  if (taskCount) parts.push(`✅ ${taskCount} 项任务`);
+  if (logCount) parts.push(`📝 ${logCount} 条日志`);
+  if (ieltsCount) parts.push(`🎯 ${ieltsCount} 次雅思`);
+  if (!parts.length) return null;
+  return el('div', {
+    className: 'card',
+    style: {
+      background: 'var(--accent-soft-var)',
+      borderColor: 'transparent',
+      fontSize: '0.9rem',
+      fontWeight: 600,
+      textAlign: 'center',
+      padding: '12px',
+    },
+    text: `今天已记录 · ${parts.join(' · ')}`,
+  });
 }

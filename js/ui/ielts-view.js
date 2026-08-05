@@ -335,9 +335,9 @@ export function renderIelts(root) {
 
         const listeningAgg = listening.partStats ? aggregatePartStats('listening', listening.partStats) : null;
         const readingAgg = reading.partStats ? aggregatePartStats('reading', reading.partStats) : null;
-        const listeningOk = lb != null || (listeningAgg != null && listeningAgg.total > 0)
+        const listeningOk = bandOf(selVal(L)) != null || (listeningAgg != null && listeningAgg.total > 0)
           || listening.mistakes.length > 0;
-        const readingOk = rb != null || (readingAgg != null && readingAgg.total > 0)
+        const readingOk = bandOf(selVal(R)) != null || (readingAgg != null && readingAgg.total > 0)
           || reading.mistakes.length > 0;
 
         if (!listeningOk && !readingOk && selVal(W) == null && selVal(S) == null && selVal(O) == null) {
@@ -345,12 +345,7 @@ export function renderIelts(root) {
           return;
         }
 
-        const buildSection = (subject, band, ui, agg) => {
-          if (band == null && (agg == null || agg.total === 0) && ui.mistakes.length === 0) return null;
-          const out = { band, correctRate: agg && agg.total > 0 ? agg.correct / agg.total : 0, mistakes: ui.mistakes };
-          if (ui.partStats) out.partStats = ui.partStats;
-          return out;
-        };
+
 
         const entry = {
           date: dateInput.value || todayStr(),
@@ -368,12 +363,10 @@ export function renderIelts(root) {
         }
         // 填了 partStats 但没填 band 时 -> 由 raw 数换 band
         if (entry.listening && entry.listening.band == null && entry.listening.partStats) {
-          const agg = aggregatePartStats('listening', entry.listening.partStats);
-          if (agg.total >= 35 && agg.total <= 45) entry.listening.band = bandFromRaw('listening', agg.correct);
+          entry.listening.band = estimateBandFromPartStats('listening', entry.listening.partStats);
         }
         if (entry.reading && entry.reading.band == null && entry.reading.partStats) {
-          const agg = aggregatePartStats('reading', entry.reading.partStats);
-          if (agg.total >= 35 && agg.total <= 45) entry.reading.band = bandFromRaw('reading', agg.correct);
+          entry.reading.band = estimateBandFromPartStats('reading', entry.reading.partStats);
         }
         addIelts(entry);
         saved = true;
@@ -1084,12 +1077,6 @@ export function renderIelts(root) {
       const reading = readingUI.read();
       const listeningAgg = listening.partStats ? aggregatePartStats('listening', listening.partStats) : null;
       const readingAgg = reading.partStats ? aggregatePartStats('reading', reading.partStats) : null;
-      const buildSection = (subject, band, ui, agg) => {
-        if (band == null && (agg == null || agg.total === 0) && ui.mistakes.length === 0) return null;
-        const out = { band, correctRate: agg && agg.total > 0 ? agg.correct / agg.total : 0, mistakes: ui.mistakes };
-        if (ui.partStats) out.partStats = ui.partStats;
-        return out;
-      };
       const next = {
         date: dateIn.value || todayStr(),
         paper: paperIn.value.trim(),
@@ -1106,12 +1093,10 @@ export function renderIelts(root) {
       }
       // 填了 partStats 但没填 band 时 -> 由 raw 数换 band
       if (next.listening && next.listening.band == null && next.listening.partStats) {
-        const agg = aggregatePartStats('listening', next.listening.partStats);
-        if (agg.total >= 35 && agg.total <= 45) next.listening.band = bandFromRaw('listening', agg.correct);
+        next.listening.band = estimateBandFromPartStats('listening', next.listening.partStats);
       }
       if (next.reading && next.reading.band == null && next.reading.partStats) {
-        const agg = aggregatePartStats('reading', next.reading.partStats);
-        if (agg.total >= 35 && agg.total <= 45) next.reading.band = bandFromRaw('reading', agg.correct);
+        next.reading.band = estimateBandFromPartStats('reading', next.reading.partStats);
       }
       updateIelts(item.id, next);
       toast('已保存', 'success');
@@ -1124,6 +1109,21 @@ export function renderIelts(root) {
 /* =========================
  * 纯展示助手
  * ========================= */
+
+function buildSection(subject, band, ui, agg) {
+  if (band == null && (agg == null || agg.total === 0) && ui.mistakes.length === 0) return null;
+  const out = { band, correctRate: agg && agg.total > 0 ? agg.correct / agg.total : 0, mistakes: ui.mistakes };
+  if (ui.partStats) out.partStats = ui.partStats;
+  return out;
+}
+
+function estimateBandFromPartStats(subject, partStats) {
+  if (!partStats) return null;
+  const agg = aggregatePartStats(subject, partStats);
+  if (agg.total >= 35 && agg.total <= 45) return bandFromRaw(subject, agg.correct);
+  return null;
+}
+
 function modeLabel(m) {
   return (
     { full: '全套', listening: '听力', reading: '阅读', writing: '写作', speaking: '口语' }[m] || m

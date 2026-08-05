@@ -89,6 +89,9 @@ export function renderStats(root) {
         ),
       ]),
 
+      /* 月内专注折线 */
+      monthlySparklineSection(data),
+
       el('div', { className: 'grid-2' }, [
         el('section', { className: 'card' }, [
           el('div', { className: 'card-header' }, [
@@ -143,7 +146,7 @@ export function renderStats(root) {
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
           el('h3', { text: '近 16 周热力图' }),
-          el('span', { className: 'badge', text: `${activeDays} 个活跃日` }),
+          el('span', { className: 'badge', text: `${activeDays} 个活跃日 · 共 ${heat.filter(c => !c.future).length} 天` }),
         ]),
         el(
           'div',
@@ -174,5 +177,88 @@ function cardStat(label, value, hint) {
     el('div', { className: 'stat-label', text: label }),
     el('div', { className: 'stat-value', text: value }),
     el('div', { className: 'stat-hint', text: hint }),
+  ]);
+}
+
+/** Monthly focus sparkline: each day's total focus minutes for the current month. */
+function monthlySparklineSection(data) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const prefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+  const days = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${prefix}-${String(d).padStart(2, '0')}`;
+    const minutes = data.sessions
+      .filter((s) => s.date === key && s.type === 'focus')
+      .reduce((a, s) => a + (s.minutes || 0), 0);
+    days.push({ date: key, day: d, minutes });
+  }
+
+  const totalMin = days.reduce((a, d) => a + d.minutes, 0);
+  const activeDays = days.filter((d) => d.minutes > 0).length;
+
+  const w = 640, h = 100, pad = 20;
+  const maxMin = Math.max(1, ...days.map((d) => d.minutes));
+  const pts = days.map((d, i) => ({
+    x: pad + (i * (w - pad * 2)) / Math.max(1, days.length - 1),
+    y: h - pad - ((d.minutes / maxMin) * (h - pad * 2)),
+    day: d.day,
+    minutes: d.minutes,
+  }));
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'sparkline');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  // axis
+  const axis = document.createElementNS(svgNS, 'line');
+  axis.setAttribute('class', 'axis');
+  axis.setAttribute('x1', String(pad));
+  axis.setAttribute('x2', String(w - pad));
+  axis.setAttribute('y1', String(h - pad));
+  axis.setAttribute('y2', String(h - pad));
+  svg.append(axis);
+
+  // fill area under line
+  if (pts.length >= 2) {
+    const fillD = `M${pts[0].x.toFixed(1)},${h - pad} ${d.slice(1)} L${pts[pts.length - 1].x.toFixed(1)},${h - pad} Z`;
+    const fill = document.createElementNS(svgNS, 'path');
+    fill.setAttribute('d', fillD);
+    fill.setAttribute('fill', 'var(--accent-soft-var)');
+    fill.setAttribute('opacity', '0.4');
+    svg.append(fill);
+  }
+
+  const path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('class', 'line');
+  path.setAttribute('d', d);
+  svg.append(path);
+
+  for (const p of pts) {
+    if (p.minutes === 0) continue;
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', String(p.x));
+    c.setAttribute('cy', String(p.y));
+    c.setAttribute('r', '3');
+    const t = document.createElementNS(svgNS, 'title');
+    t.textContent = `${prefix}-${String(p.day).padStart(2, '0')} · ${p.minutes} 分钟`;
+    c.append(t);
+    svg.append(c);
+  }
+
+  return el('section', { className: 'card' }, [
+    el('div', { className: 'card-header' }, [
+      el('h3', { text: `本月专注 · ${prefix}` }),
+      el('span', { className: 'badge', text: `${activeDays} 天活跃 · ${totalMin} 分钟` }),
+    ]),
+    totalMin > 0
+      ? el('div', {}, [svg])
+      : el('div', { className: 'empty soft', text: '本月还没有专注记录 📊' }),
   ]);
 }

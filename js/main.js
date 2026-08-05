@@ -65,6 +65,8 @@ function render() {
     viewRoot._cleanup = null;
   }
   viewRoot.replaceChildren();
+  // Remove skeleton — view will fill content
+  viewRoot.classList.remove('skeleton-loaded');
   const fn = VIEWS[currentView] || renderDashboard;
   fn(viewRoot, ctx);
   // body class for padding under mini bar
@@ -159,6 +161,27 @@ window.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
   e.preventDefault();
   pomodoro.toggle();
+});
+
+// Global keyboard shortcuts for view navigation
+const SHORTCUTS = {
+  d: 'dashboard',
+  t: 'timer',
+  k: 'tasks',
+  l: 'logs',
+  i: 'ielts',
+  a: 'stats',
+  s: 'settings',
+};
+window.addEventListener('keydown', (e) => {
+  // Ignore if typing in an input or meta/ctrl/alt is held
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return;
+  if (e.key in SHORTCUTS && SHORTCUTS[e.key] !== currentView) {
+    e.preventDefault();
+    ctx.navigate(SHORTCUTS[e.key]);
+  }
 });
 
 // Boot

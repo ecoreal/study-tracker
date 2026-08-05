@@ -18,7 +18,7 @@
   --shadow: 0 1px 2px rgba(15, 31, 28, 0.06), 0 8px 24px rgba(15, 31, 28, 0.06);
   --radius: 14px;
   --radius-sm: 10px;
-  --radius-sm: 10px;
+  --radius-scale: 1;
   --font: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --nav-h: 52px;
@@ -302,13 +302,48 @@ a {
   background: var(--accent-var);
 }
 
+/* Skeleton loading */
+.skeleton {
+  display: grid;
+  gap: 16px;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+.skeleton-blocks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .skeleton-blocks {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.skeleton-block {
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+}
+
+/* Once views load, skeleton is hidden */
+.skeleton-loaded .skeleton {
+  display: none;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
 [data-theme="dark"] .nav-item.active {
   color: #042f2e;
 }
 
 /* Views */
 .view-root {
-  animation: fadeIn 0.18s ease;
+  animation: fadeIn 0.22s ease;
 }
 
 .view {
@@ -939,6 +974,23 @@ textarea {
   font-weight: 600;
 }
 
+/* Settings — 更明显的视觉分组 */
+.card.form-grid > h3 {
+  font-size: 1.05rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.card.form-grid + .card.form-grid {
+  border-top: 2px solid var(--border);
+}
+
+/* 首尾卡片不需要额外间距 */
+.card.form-grid:first-of-type {
+  margin-top: 0;
+}
+
 /* Toast */
 .toast-root {
   position: fixed;
@@ -951,19 +1003,57 @@ textarea {
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   border-radius: 12px;
   padding: 12px 14px;
   font-size: 0.9rem;
-  animation: slideIn 0.2s ease;
-  transition: opacity 0.2s, transform 0.2s;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.toast.in {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .toast.out {
   opacity: 0;
   transform: translateY(6px);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+.toast-close:hover {
+  background: var(--bg-muted);
 }
 
 .toast.success {
@@ -1249,7 +1339,6 @@ textarea {
   border-radius: calc(var(--radius) * var(--radius-scale));
   box-shadow: var(--shadow);
   padding: calc(16px * var(--space-unit));
-  animation: fadeIn 0.18s ease;
   overscroll-behavior: contain;
   transition: opacity 0.15s ease;
 }
@@ -1854,10 +1943,7 @@ textarea {
   }
 }
 
-/* 视图切换过渡 */
-.view-root {
-  animation: fadeIn 0.22s ease;
-}
+/* 视图切换过渡 —— 已在 .view-root 上定义，移除重复 */
 
 /* 卡片 hover 微交互（桌面端） */
 @media (pointer: fine) {

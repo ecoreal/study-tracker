@@ -1,4 +1,4 @@
-import { el, toast } from './components.js';
+import { el, toast, fieldRow, confirmModal } from './components.js';
 import {
   getData,
   getMeta,
@@ -117,10 +117,10 @@ export function renderSettings(root, ctx) {
       el('section', { className: 'card form-grid' }, [
         el('h3', { text: '番茄钟' }),
         el('div', { className: 'form-row inline' }, [
-          field('专注（分钟）', focusIn),
-          field('短休（分钟）', shortIn),
-          field('长休（分钟）', longIn),
-          field('每 N 个专注后长休', everyIn),
+          fieldRow('专注（分钟）', focusIn),
+          fieldRow('短休（分钟）', shortIn),
+          fieldRow('长休（分钟）', longIn),
+          fieldRow('每 N 个专注后长休', everyIn),
         ]),
         el('div', { className: 'checkbox-row' }, [
           soundIn,
@@ -161,8 +161,8 @@ export function renderSettings(root, ctx) {
         el('h3', { text: '每日目标' }),
         el('p', { className: 'help', text: '显示在「今日」看板的进度条上。' }),
         el('div', { className: 'form-row inline' }, [
-          field('每日专注分钟', goalMinIn),
-          field('每日番茄个数', goalCountIn),
+          fieldRow('每日专注分钟', goalMinIn),
+          fieldRow('每日番茄个数', goalCountIn),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -184,13 +184,13 @@ export function renderSettings(root, ctx) {
 
       el('section', { className: 'card form-grid' }, [
         el('h3', { text: '科目与主题' }),
-        field('科目标签', subjectsIn),
+        fieldRow('科目标签', subjectsIn),
         el('p', { className: 'help', text: '用顿号「、」或逗号「,」分隔。' }),
-        field('主题', themeSelect),
+        fieldRow('主题', themeSelect),
         el('div', { className: 'form-row inline' }, [
-          field('字号', fontScaleSelect),
-          field('密度', densitySelect),
-          field('强调色', accentSelect),
+          fieldRow('字号', fontScaleSelect),
+          fieldRow('密度', densitySelect),
+          fieldRow('强调色', accentSelect),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -228,9 +228,9 @@ export function renderSettings(root, ctx) {
           text: '在「雅思 → 学习分析」中用来对照当周各 Part 的正确率是否达标。',
         }),
         el('div', { className: 'form-row inline' }, [
-          field('听力目标分', goalListening),
-          field('阅读目标分', goalReading),
-          field('总分目标', goalOverall),
+          fieldRow('听力目标分', goalListening),
+          fieldRow('阅读目标分', goalReading),
+          fieldRow('总分目标', goalOverall),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -265,8 +265,8 @@ export function renderSettings(root, ctx) {
             text: '打开创建 Token 页面',
           }),
         ]),
-        field('Personal Access Token', tokenIn),
-        field('Gist ID（可选）', gistIdIn),
+        fieldRow('Personal Access Token', tokenIn),
+        fieldRow('Gist ID（可选）', gistIdIn),
         syncInfo,
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -305,7 +305,13 @@ export function renderSettings(root, ctx) {
             className: 'btn btn-ghost',
             text: '强制拉取',
             onClick: async () => {
-              if (!confirm('将用云端数据覆盖本地，确定？')) return;
+              const ok = await confirmModal({
+                title: '强制拉取',
+                message: '将用云端数据覆盖本地，确定？',
+                confirmText: '覆盖',
+                danger: true,
+              });
+              if (!ok) return;
               try {
                 await gist.pull({ force: true });
                 toast('已从云端覆盖本地', 'success');
@@ -375,8 +381,14 @@ export function renderSettings(root, ctx) {
             type: 'button',
             className: 'btn btn-danger',
             text: '清空本地数据',
-            onClick: () => {
-              if (!confirm('确定清空本机全部学习数据？此操作不可撤销（Gist 云端不受影响）。')) return;
+            onClick: async () => {
+              const ok = await confirmModal({
+                title: '清空本地数据',
+                message: '确定清空本机全部学习数据？此操作不可撤销（Gist 云端不受影响）。',
+                confirmText: '清空',
+                danger: true,
+              });
+              if (!ok) return;
               clearAllLocalData();
               toast('本地数据已清空', 'info');
               ctx.refresh();
@@ -401,6 +413,18 @@ export function renderSettings(root, ctx) {
             text: '4. 站点地址：https://ecoreal.github.io/study-tracker/',
           }),
         ]),
+        el('div', { className: 'help', style: { marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px' } }, [
+          el('strong', { text: '键盘快捷键：' }),
+          el('br'),
+          el('span', { text: '空格 — 开始/暂停番茄钟 · ' }),
+          el('span', { text: 'd — 今日看板 · ' }),
+          el('span', { text: 't — 番茄钟 · ' }),
+          el('span', { text: 'k — 任务 · ' }),
+          el('span', { text: 'l — 日志 · ' }),
+          el('span', { text: 'i — 雅思 · ' }),
+          el('span', { text: 'a — 统计 · ' }),
+          el('span', { text: 's — 设置' }),
+        ]),
       ]),
     ]),
   );
@@ -417,10 +441,6 @@ function bandSelect(value) {
   ]);
   sel.value = value != null ? Number(value).toFixed(1) : '';
   return sel;
-}
-
-function field(label, control) {
-  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
 }
 
 function clampInt(v, min, max, fallback) {

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="学习记录 · 番茄钟 · 雅思得分 · GitHub Gist 同步" />
   <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.json" />
   <title>Study Tracker · 学习面板</title>
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🍅%3C/text%3E%3C/svg%3E" />
@@ -35,12 +38,28 @@
       <button type="button" class="nav-item" data-view="settings"><span class="nav-ico" aria-hidden="true">⚙️</span>设置</button>
     </nav>
 
-    <main id="view-root" class="view-root"></main>
+    <main id="view-root" class="view-root">
+      <div class="skeleton">
+        <div class="skeleton-block" style="height:80px"></div>
+        <div class="skeleton-blocks">
+          <div class="skeleton-block" style="height:120px"></div>
+          <div class="skeleton-block" style="height:120px"></div>
+          <div class="skeleton-block" style="height:120px"></div>
+          <div class="skeleton-block" style="height:120px"></div>
+        </div>
+        <div class="skeleton-block" style="height:140px"></div>
+      </div>
+    </main>
 
     <div id="mini-bar-root" class="mini-bar-root"></div>
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
   </div>
 
   <script type="module" src="js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>
