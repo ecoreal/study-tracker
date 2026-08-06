@@ -89,6 +89,20 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+/**
+ * 跨标签页实时同步：当其他标签页写入 localStorage 时，
+ * 重新从 localStorage 加载最新数据并通知所有订阅者（本标签不写回，避免回环）。
+ */
+if (typeof window !== 'undefined' && 'addEventListener' in window) {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== STORAGE_KEY || e.newValue == null) return;
+    try {
+      data = migrate(JSON.parse(e.newValue));
+      for (const fn of listeners) fn(data);
+    } catch { /* ignore malformed cross-tab writes */ }
+  });
+}
+
 export function setOnChangeHook(fn) {
   onChangeHook = fn;
 }

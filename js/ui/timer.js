@@ -385,9 +385,3 @@ function clamp(v, min, max, fallback) {
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return { todayStr: `${y}-${m}-${day}` };
-}

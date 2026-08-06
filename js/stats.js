@@ -13,22 +13,51 @@ function dayKey(d) {
   return todayStr(d);
 }
 
+/**
+ * Build date-keyed indexes once, so the many per-day loops in the
+ * views (heatmap, week bars, month summary, streak) avoid rescanning
+ * the full arrays for every date.  All helpers below accept the indexes
+ * (or build them lazily from `data`).
+ */
+export function buildIndexes(data) {
+  const focusByDay = new Map();   // date -> minutes (focus sessions only)
+  const logMinByDay = new Map();  // date -> total log minutes
+  const activeByDay = new Map();  // date -> true (any activity incl. ielts/tasks)
+  const ieltsDates = new Set(data.ielts.map((i) => i.date));
+
+  for (const s of data.sessions) {
+    if (s.type !== 'focus' || !s.date) continue;
+    focusByDay.set(s.date, (focusByDay.get(s.date) || 0) + (s.minutes || 0));
+  }
+  for (const l of data.logs) {
+    if (!l.date) continue;
+    logMinByDay.set(l.date, (logMinByDay.get(l.date) || 0) + (l.minutes || 0));
+  }
+  for (const t of data.tasks) {
+    if (t.done && t.date) activeByDay.set(t.date, true);
+  }
+  for (const d of focusByDay.keys()) activeByDay.set(d, true);
+  for (const d of logMinByDay.keys()) activeByDay.set(d, true);
+  for (const d of ieltsDates) activeByDay.set(d, true);
+
+  return { focusByDay, logMinByDay, activeByDay, ieltsDates };
+}
+
 function isActiveDay(data, date) {
-  if (data.logs.some((l) => l.date === date)) return true;
-  if (data.sessions.some((s) => s.date === date && s.type === 'focus')) return true;
-  if (data.ielts.some((i) => i.date === date)) return true;
-  if (data.tasks.some((t) => t.date === date && t.done)) return true;
-  return false;
+  const idx = buildIndexes(data);
+  return idx.activeByDay.has(date);
 }
 
 /** Consecutive study days ending today or yesterday (if not yet studied today). */
 export function streakDays(data) {
+  const idx = buildIndexes(data);
+  const activeByDay = idx.activeByDay;
   let cursor = parseDay(todayStr());
-  if (!isActiveDay(data, dayKey(cursor))) {
+  if (!activeByDay.has(dayKey(cursor))) {
     cursor.setDate(cursor.getDate() - 1);
   }
   let streak = 0;
-  while (isActiveDay(data, dayKey(cursor))) {
+  while (activeByDay.has(dayKey(cursor))) {
     streak += 1;
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -48,13 +77,12 @@ export function todayTasksStats(data, date = todayStr()) {
 }
 
 export function weekFocusMinutes(data, end = new Date()) {
+  const idx = buildIndexes(data);
   const result = [];
   for (let i = 6; i >= 0; i -= 1) {
     const d = new Date(end.getFullYear(), end.getMonth(), end.getDate() - i);
     const key = dayKey(d);
-    const minutes = data.sessions
-      .filter((s) => s.date === key && s.type === 'focus')
-      .reduce((a, s) => a + (s.minutes || 0), 0);
+    const minutes = idx.focusByDay.get(key) || 0;
     const labels = ['日', '一', '二', '三', '四', '五', '六'];
     result.push({ date: key, label: labels[d.getDay()], minutes });
   }
@@ -78,6 +106,7 @@ export function monthSummary(data, ref = new Date()) {
 
 /** Last `weeks` weeks of activity intensity 0–4 for heatmap (Mon-start or Sun-start). */
 export function heatmap(data, weeks = 12, end = new Date()) {
+  const idx = buildIndexes(data);
   const cells = [];
   const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
   // Align to end of week (Saturday if we use Sun-start rows like GitHub: Sun=0)
@@ -91,13 +120,9 @@ export function heatmap(data, weeks = 12, end = new Date()) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const key = dayKey(d);
-    const focusMin = data.sessions
-      .filter((s) => s.date === key && s.type === 'focus')
-      .reduce((a, s) => a + (s.minutes || 0), 0);
-    const logMin = data.logs
-      .filter((l) => l.date === key)
-      .reduce((a, l) => a + (l.minutes || 0), 0);
-    const score = focusMin + logMin + (data.ielts.some((x) => x.date === key) ? 30 : 0);
+    const focusMin = idx.focusByDay.get(key) || 0;
+    const logMin = idx.logMinByDay.get(key) || 0;
+    const score = focusMin + logMin + (idx.ieltsDates.has(key) ? 30 : 0);
     let level = 0;
     if (score > 0) level = 1;
     if (score >= 30) level = 2;
@@ -110,9 +135,5 @@ export function heatmap(data, weeks = 12, end = new Date()) {
 }
 
 export function activityDates(data) {
-  const set = new Set();
-  for (const l of data.logs) set.add(l.date);
-  for (const s of data.sessions) if (s.type === 'focus') set.add(s.date);
-  for (const i of data.ielts) set.add(i.date);
-  return set;
+  return buildIndexes(data).activeByDay;
 }
