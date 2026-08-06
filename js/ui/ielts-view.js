@@ -127,6 +127,41 @@ export function renderIelts(root) {
     const W = mkBand('writing', 'Writing');
     const S = mkBand('speaking', 'Speaking');
     const O = mkBand('overall', 'Overall（可自动）');
+    const overallPreview = el('p', { className: 'help', style: { marginTop: '4px' }, text: '选满四科后自动显示预估值，一键填入' });
+    // 实时预览 Overall
+    function updateOverallPreview() {
+      const lb = Number(L.querySelector('select').value) || null;
+      const rb = Number(R.querySelector('select').value) || null;
+      const wb = Number(W.querySelector('select').value) || null;
+      const sb = Number(S.querySelector('select').value) || null;
+      const missing = [];
+      if (lb == null) missing.push('Listening');
+      if (rb == null) missing.push('Reading');
+      if (wb == null) missing.push('Writing');
+      if (sb == null) missing.push('Speaking');
+      if (missing.length === 0) {
+        const o = computeOverall(lb, rb, wb, sb);
+        if (o != null) overallPreview.innerHTML = `按四科 ≈ <b>${o.toFixed(1)}</b> <a href="#" id="overall-live-fill" style="cursor:pointer">填入</a>`;
+      } else {
+        overallPreview.textContent = `缺 ${missing.join('、')}，填满后自动预估 Overall`;
+      }
+    }
+    for (const wrap of [L, R, W, S]) {
+      wrap.querySelector('select').addEventListener('change', updateOverallPreview);
+    }
+    // 为实时预览的「填入」链接加点击——用事件委托（因为 link 是 later 插入的 innerHTML）
+    overallPreview.addEventListener('click', (e) => {
+      if (e.target.id === 'overall-live-fill') {
+        const o = computeOverall(
+          Number(L.querySelector('select').value),
+          Number(R.querySelector('select').value),
+          Number(W.querySelector('select').value),
+          Number(S.querySelector('select').value),
+        );
+        if (o != null) O.querySelector('select').value = o.toFixed(1);
+        toast(`Overall = ${o.toFixed(1)}`, 'success');
+      }
+    });
     const notes = el('textarea', { placeholder: '范文、口语话题、备注…', rows: 2 });
 
     const autoBtn = el('button', {
@@ -144,10 +179,26 @@ export function renderIelts(root) {
     // Part stats + mistakes (始终展现，可选填)
     const listeningUI = buildSubjectForm('listening');
     const readingUI  = buildSubjectForm('reading');
+    const subscoreWrap = el('div', { className: 'subscore-grid' }, [listeningUI.container, readingUI.container]);
+    // 模式联动：写作/口语模式下无需听读明细，折叠减少干扰
+    const subscoreHint = el('p', { className: 'help', hidden: true, style: { margin: '4px 0 0' }, text: '写作 / 口语模式无需填写听力、阅读明细，直接在上方填对应分数即可。' });
+    function syncSubscore() {
+      const hidden = modeSelect.value === 'writing' || modeSelect.value === 'speaking';
+      subscoreWrap.hidden = hidden;
+      subscoreHint.hidden = !hidden;
+    }
+    modeSelect.addEventListener('change', syncSubscore);
+    syncSubscore();
+
+    // 试卷联想：从历史记录去重
+    const paperList = el('datalist', { id: 'ielts-paper-history' });
+    const knownPapers = [...new Set(getData().ielts.map((i) => (i.paper || '').trim()).filter(Boolean))];
+    knownPapers.forEach((p) => paperList.append(el('option', { value: p })));
+    paperInput.setAttribute('list', 'ielts-paper-history');
 
     formSubmit({
-      container, dateInput, paperInput, modeSelect,
-      L, R, W, S, O, notes, autoBtn,
+      container, dateInput, paperInput, paperList, modeSelect,
+      L, R, W, S, O, notes, autoBtn, overallPreview, subscoreWrap, subscoreHint,
       listeningUI, readingUI,
     });
   }
@@ -313,7 +364,7 @@ export function renderIelts(root) {
   }
 
   function formSubmit(ctx) {
-    const { container, dateInput, paperInput, modeSelect, L, R, W, S, O, notes, autoBtn, listeningUI, readingUI } = ctx;
+    const { container, dateInput, paperInput, paperList, modeSelect, L, R, W, S, O, notes, autoBtn, overallPreview, subscoreWrap, subscoreHint, listeningUI, readingUI } = ctx;
     let saved = false; // onSubmit 改 true 后，「保存后去错题本」才允许跳 tab
     const resetForm = () => {
       paperInput.value = '';
@@ -384,7 +435,9 @@ export function renderIelts(root) {
         el('div', { className: 'form-row' }, [el('label', { text: '模式' }), modeSelect]),
       ]),
       el('div', { className: 'form-row inline band-row' }, [L, R, W, S, O]),
-      el('div', { className: 'subscore-grid' }, [listeningUI.container, readingUI.container]),
+      overallPreview,
+      subscoreWrap,
+      subscoreHint,
       el('div', { className: 'form-row' }, [el('label', { text: '备注' }), notes]),
       el('div', { className: 'btn-row' }, [
         el('button', { type: 'submit', className: 'btn btn-primary', text: '保存成绩' }),
@@ -398,6 +451,7 @@ export function renderIelts(root) {
           },
         }),
       ]),
+      paperList,
     ]);
     container.append(form);
   }
@@ -585,6 +639,19 @@ export function renderIelts(root) {
       filterBtn('all', '全部'),
       filterBtn('listening', '听力'),
       filterBtn('reading', '阅读'),
+      tagSelect,
+    ]);
+    const tagOpts = ['', ...MISTAKE_TAGS];
+    let tagFilterValue = '';
+    const tagSelect = el('select', {
+      className: 'mistake-tag-filter',
+      onChange: () => {
+        tagFilterValue = tagSelect.value;
+        paintMistakes();
+      },
+    }, [
+      el('option', { value: '', text: '全部错因类型' }),
+      ...tagOpts.filter(Boolean).map((t) => el('option', { value: t, text: t })),
     ]);
     const listRoot = el('div');
     function filterBtn(key, label) {
@@ -606,7 +673,11 @@ export function renderIelts(root) {
     function paintMistakes() {
       listRoot.replaceChildren();
       const flat = gatherMistakes();
-      const rows = mistakeFilter === 'all' ? flat : flat.filter((r) => r.subject === mistakeFilter);
+      const rows = flat.filter((r) => {
+        if (mistakeFilter !== 'all' && r.subject !== mistakeFilter) return false;
+        if (tagFilterValue && r.mistake.tag !== tagFilterValue) return false;
+        return true;
+      });
       if (!rows.length) {
         listRoot.append(el('div', { className: 'empty', text: '还没有错题记录，去「录入」页记一条' }));
         return;
@@ -769,15 +840,32 @@ export function renderIelts(root) {
   function renderBandTable(container) {
     const data = getData();
     const last = data.ielts[0];
+    // 统计全部历史成绩分布（多成绩高亮）
+    const allL = []; const allR = [];
+    for (const it of data.ielts) {
+      const lb = bandOf(it.listening);
+      if (lb != null) allL.push(lb);
+      const rb = bandOf(it.reading);
+      if (rb != null) allR.push(rb);
+    }
+    const rawForBand = (band, table) => {
+      const idx = table.indexOf(Math.round(band * 2) / 2);
+      if (idx < 0) {
+        // 近似找最接近的 raw
+        for (let i = 0; i < table.length; i++) if (table[i] >= band) return i;
+        return null;
+      }
+      return idx;
+    };
+    const allLCounts = {}; allL.forEach((b) => { const r = rawForBand(b, LISTENING_RAW_TO_BAND); if (r != null) allLCounts[r] = (allLCounts[r] || 0) + 1; });
+    const allRCounts = {}; allR.forEach((b) => { const r = rawForBand(b, READING_AC_RAW_TO_BAND); if (r != null) allRCounts[r] = (allRCounts[r] || 0) + 1; });
+    const allGTCounts = {}; allR.forEach((b) => { const r = rawForBand(b, READING_GT_RAW_TO_BAND); if (r != null) allGTCounts[r] = (allGTCounts[r] || 0) + 1; });
+
     // 以最近一次成绩的 band 为准高亮对应题数区间
     const lastL = last ? bandOf(last.listening) : null;
     const lastR = last ? bandOf(last.reading) : null;
-    const lastLCorrect = lastL != null
-      ? LISTENING_RAW_TO_BAND.indexOf(Math.round(lastL * 2) / 2)
-      : null;
-    const lastRCorrect = lastR != null
-      ? READING_AC_RAW_TO_BAND.indexOf(Math.round(lastR * 2) / 2)
-      : null;
+    const lastLCorrect = lastL != null ? rawForBand(lastL, LISTENING_RAW_TO_BAND) : null;
+    const lastRCorrect = lastR != null ? rawForBand(lastR, READING_AC_RAW_TO_BAND) : null;
 
     // 考试类型：默认 Academic（用户考试目标）
     let examType = 'academic'; // academic | general
@@ -797,22 +885,26 @@ export function renderIelts(root) {
     const Rbands = Object.keys(Rmap).map(Number).sort((a, b) => b - a);
     const GTbands = Object.keys(GTmap).map(Number).sort((a, b) => b - a);
 
-    const row = (band, map, highlightRaw) => {
+    const row = (band, map, { highlightRaw, countMap }) => {
       const list = map[band];
       const min = Math.min(...list);
       const max = Math.max(...list);
+      // 该 band 是否命中过历史成绩（任一对题数区间内）
+      const hasCount = list.some((raw) => (countMap[raw] || 0) > 0);
+      const count = list.reduce((a, raw) => a + (countMap[raw] || 0), 0);
       const isMine = highlightRaw != null && highlightRaw >= min && highlightRaw <= max;
       return el('tr', { className: isMine ? 'band-row-mine' : '' }, [
         el('td', { className: 'band-cell', text: band.toFixed(1) }),
         el('td', { text: min === max ? `${min} 题` : `${min}~${max} 题` }),
         el('td', { className: 'band-raw' }, [
           el('span', { className: 'band-raw-dots', text: '●'.repeat(Math.max(1, Math.round((max - min + 1) / 4))) }),
-          isMine ? el('span', { className: 'badge', text: '最近成绩' }) : null,
+          hasCount ? el('span', { className: 'badge', text: `×${count}` }) : null,
+          isMine ? el('span', { className: 'badge', text: '最近' }) : null,
         ]),
       ]);
     };
 
-    const table = (title, note, map, bands, highlightRaw) => el('div', { className: 'card band-table-card' }, [
+    const table = (title, note, map, bands, highlightRaw, countMap) => el('div', { className: 'card band-table-card' }, [
       el('div', { className: 'card-header' }, [
         el('h3', { text: title }),
         el('span', { className: 'badge', text: '共 40 题' }),
@@ -827,7 +919,7 @@ export function renderIelts(root) {
               el('th', { text: '分布' }),
             ]),
           ]),
-          el('tbody', {}, bands.map((b) => row(b, map, highlightRaw))),
+          el('tbody', {}, bands.map((b) => row(b, map, { highlightRaw, countMap }))),
         ]),
       ]),
     ]);
@@ -858,13 +950,13 @@ export function renderIelts(root) {
       grid.replaceChildren();
       if (examType === 'academic') {
         grid.append(
-          table('听力', 'Listening · Academic', Lmap, Lbands, lastLCorrect),
-          table('阅读 · Academic', 'Reading · Academic', Rmap, Rbands, lastRCorrect),
+          table('听力', 'Listening · Academic', Lmap, Lbands, lastLCorrect, allLCounts),
+          table('阅读 · Academic', 'Reading · Academic', Rmap, Rbands, lastRCorrect, allRCounts),
         );
       } else {
         grid.append(
-          table('听力', 'Listening（与 Academic 相同）', Lmap, Lbands, lastLCorrect),
-          table('阅读 · General Training', 'Reading · General Training', GTmap, GTbands, null),
+          table('听力', 'Listening（与 Academic 相同）', Lmap, Lbands, lastLCorrect, allLCounts),
+          table('阅读 · General Training', 'Reading · General Training', GTmap, GTbands, null, allGTCounts),
         );
       }
     }
@@ -881,8 +973,8 @@ export function renderIelts(root) {
         typeTabs,
         grid,
         el('p', { className: 'help', style: { textAlign: 'center' } }, [
-          '最近一次成绩会自动高亮显示。',
-          lastL != null ? ` 你最近听力 ${formatBand(lastL)}，阅读 ${formatBand(lastR)}。` : ' 录入成绩后这里会显示你的位置。',
+          '所有考试成绩会在对应 band 行显示 ×N 出现次数。',
+          lastL != null ? ` 你最近听力 ${formatBand(lastL)}，阅读 ${formatBand(lastR)}，标记为「最近」。` : ' 录入成绩后这里会显示你的位置。',
         ]),
       ]),
     );
@@ -929,9 +1021,70 @@ export function renderIelts(root) {
     function paintRecords() {
       const items = filtered();
       chartRoot.replaceChildren();
+      // 最佳成绩速览（当前筛选范围内）
+      const best = { listening: null, reading: null, writing: null, speaking: null, overall: null };
+      for (const it of items) {
+        for (const k of Object.keys(best)) {
+          const b = bandOf(it[k]);
+          if (b != null && (best[k] == null || b > best[k])) best[k] = b;
+        }
+      }
+      const goals = getData().settings.ieltsGoals || {};
+      const goalOf = (k) => (k === 'overall' ? goals.overall : k === 'listening' ? goals.listening : k === 'reading' ? goals.reading : null);
+      const hasBest = Object.values(best).some((b) => b != null);
+      if (hasBest) {
+        const pills = [
+          ['听力', 'listening'], ['阅读', 'reading'], ['写作', 'writing'], ['口语', 'speaking'], ['Overall', 'overall'],
+        ].map(([label, key]) => {
+          const b = best[key];
+          const goal = goalOf(key);
+          const met = b != null && goal != null && b >= goal;
+          return el('div', {
+            className: `score-pill ${key === 'overall' ? 'overall' : ''}${met ? ' met' : ''}`,
+            title: goal != null ? `目标 ${goal.toFixed(1)}` : '未设目标',
+          }, [
+            el('div', { className: 'k', text: label }),
+            el('div', { className: 'v', text: b != null ? b.toFixed(1) : '—' }),
+            goal != null
+              ? el('div', { className: 'sub', text: met ? `达标 ${goal.toFixed(1)}` : `目标 ${goal.toFixed(1)}` })
+              : el('div', { className: 'sub', text: '未设目标' }),
+          ]);
+        });
+        chartRoot.append(
+          el('div', { className: 'best-row', title: '当前筛选范围内各技能最佳成绩' }, [
+            el('span', { className: 'best-label', text: '最佳成绩' }),
+            el('div', { className: 'score-grid' }, pills),
+          ]),
+        );
+      }
       const withOverall = items.filter((i) => i.overall != null);
-      if (withOverall.length >= 2) chartRoot.append(sparkline(withOverall));
-      else chartRoot.append(el('div', { className: 'empty', text: '攒 2 条带 Overall 的记录就会显示趋势' }));
+      if (withOverall.length >= 2) {
+        chartRoot.append(sparkline(withOverall, 'Overall', '#0f766e'));
+      } else {
+        chartRoot.append(el('div', { className: 'empty', text: `再录 ${2 - withOverall.length} 条带 Overall 的记录就会显示趋势` }));
+        if (withOverall.length < 2) {
+          chartRoot.append(el('button', {
+            type: 'button', className: 'btn btn-sm btn-ghost', style: { marginTop: '8px' },
+            text: '去录入',
+            onClick: () => setTab('form'),
+          }));
+        }
+      }
+      // 分技能趋势 sparkline (4条小图)
+      const sectionSparklineRoot = el('div', { className: 'section-sparklines', style: { marginTop: '8px' } });
+      const secKeys = [
+        { key: 'listening', label: '听力', color: '#14b8a6' },
+        { key: 'reading', label: '阅读', color: '#f59e0b' },
+        { key: 'writing', label: '写作', color: '#8b5cf6' },
+        { key: 'speaking', label: '口语', color: '#ec4899' },
+      ];
+      for (const sec of secKeys) {
+        const seq = items.map((i) => ({ date: i.date, val: bandOf(i[sec.key]) })).filter((x) => x.val != null);
+        if (seq.length >= 2) {
+          sectionSparklineRoot.append(miniSparkline(seq, sec.label, sec.color));
+        }
+      }
+      chartRoot.append(sectionSparklineRoot);
 
       listRoot.replaceChildren();
       const desc = [...items].reverse();
@@ -1140,7 +1293,7 @@ function scorePill(k, v, overall = false) {
   ]);
 }
 
-function sparkline(items) {
+function sparkline(items, label = 'Overall', color = '#0f766e') {
   const w = 640, h = 160, pad = 24;
   const vals = items.map((i) => Number(i.overall));
   const min = Math.min(...vals, 5);
@@ -1163,10 +1316,11 @@ function sparkline(items) {
   axis.setAttribute('y1', String(h - pad)); axis.setAttribute('y2', String(h - pad));
   svg.append(axis);
   const path = document.createElementNS(svgNS, 'path');
-  path.setAttribute('class', 'line'); path.setAttribute('d', d); svg.append(path);
+  path.setAttribute('class', 'line'); path.setAttribute('d', d); path.style.stroke = color; svg.append(path);
   for (const p of pts) {
     const c = document.createElementNS(svgNS, 'circle');
     c.setAttribute('cx', String(p.x)); c.setAttribute('cy', String(p.y)); c.setAttribute('r', '4');
+    c.style.fill = color;
     const t = document.createElementNS(svgNS, 'title');
     t.textContent = `${p.item.date} · ${formatBand(p.item.overall)}`;
     c.append(t);
@@ -1174,7 +1328,43 @@ function sparkline(items) {
   }
   const labels = el('div', {
     className: 'item-meta', style: { marginTop: '8px' },
-    text: `${items[0].date} ~ ${items[items.length - 1].date} · ${items.length} 次 · 最新 ${formatBand(items[items.length - 1].overall)}`,
+    text: `${label} · ${items[0].date} ~ ${items[items.length - 1].date} · ${items.length} 次 · 最新 ${formatBand(items[items.length - 1].overall)}`,
   });
   return el('div', {}, [svg, labels]);
+}
+
+/** 小尺寸分技能 sparkline，输入 [{date, val}] */
+function miniSparkline(seq, label, color) {
+  const w = 160, h = 44, pad = 6;
+  const vals = seq.map((x) => x.val);
+  const min = Math.min(...vals, 4);
+  const max = Math.max(...vals, 8);
+  const span = Math.max(0.5, max - min);
+  const pts = seq.map((x, idx) => {
+    const px = pad + (idx * (w - pad * 2)) / Math.max(1, seq.length - 1);
+    const py = h - pad - ((x.val - min) / span) * (h - pad * 2);
+    return { x: px, y: py, item: x };
+  });
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'sparkline mini');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('d', d); path.style.stroke = color; path.setAttribute('stroke-width', '2'); path.setAttribute('fill', 'none');
+  svg.append(path);
+  for (const p of pts) {
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', String(p.x)); c.setAttribute('cy', String(p.y)); c.setAttribute('r', '2.5');
+    c.style.fill = color;
+    const t = document.createElementNS(svgNS, 'title');
+    t.textContent = `${label} · ${p.item.date} · ${formatBand(p.item.val)}`;
+    c.append(t);
+    svg.append(c);
+  }
+  return el('div', { className: 'mini-sparkline', title: `${label} 趋势` }, [
+    el('span', { className: 'mini-sparkline-label', text: label }),
+    svg,
+  ]);
 }

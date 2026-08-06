@@ -5,7 +5,6 @@ import { toast } from './ui/components.js';
 import { renderDashboard } from './ui/dashboard.js';
 import { renderTimer } from './ui/timer.js';
 import { renderTasks } from './ui/tasks.js';
-import { renderLogs } from './ui/logs.js';
 import { renderIelts } from './ui/ielts-view.js';
 import { renderStats } from './ui/stats-view.js';
 import { renderSettings } from './ui/settings.js';
@@ -16,7 +15,6 @@ const VIEWS = {
   dashboard: renderDashboard,
   timer: renderTimer,
   tasks: renderTasks,
-  logs: renderLogs,
   ielts: renderIelts,
   stats: renderStats,
   settings: renderSettings,
@@ -168,7 +166,6 @@ const SHORTCUTS = {
   d: 'dashboard',
   t: 'timer',
   k: 'tasks',
-  l: 'logs',
   i: 'ielts',
   a: 'stats',
   s: 'settings',

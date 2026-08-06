@@ -22,28 +22,19 @@ export function renderStats(root) {
   const maxMin = Math.max(1, ...week.map((d) => d.minutes));
   const weekTotal = week.reduce((a, d) => a + d.minutes, 0);
   const goals = data.settings.dailyGoals || { focusMinutes: 120, focusCount: 4 };
+  // recent IELTS overall list
   const activeDays = heat.filter((c) => !c.future && c.level > 0).length;
   const recentIelts = [...data.ielts]
     .filter((i) => i.overall != null)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
 
-  // subject breakdown this month
-  const prefix = new Date().toISOString().slice(0, 7);
-  const bySubject = {};
-  for (const l of data.logs) {
-    if (!l.date.startsWith(prefix)) continue;
-    bySubject[l.subject] = (bySubject[l.subject] || 0) + (l.minutes || 0);
-  }
-  const subjectRows = Object.entries(bySubject).sort((a, b) => b[1] - a[1]);
-  const subjMax = Math.max(1, ...subjectRows.map(([, m]) => m));
-
   root.append(
     el('div', { className: 'view' }, [
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: '统计与打卡' }),
-          el('p', { text: '有日志 / 专注番茄 / 雅思记录 / 完成任务，都算学习日。' }),
+          el('p', { text: '有专注番茄 / 雅思记录 / 完成任务，都算学习日。' }),
         ]),
       ]),
 
@@ -92,37 +83,11 @@ export function renderStats(root) {
       /* 月内专注折线 */
       monthlySparklineSection(data),
 
-      el('div', { className: 'grid-2' }, [
-        el('section', { className: 'card' }, [
-          el('div', { className: 'card-header' }, [
-            el('h3', { text: '本月科目时长' }),
-            el('span', { className: 'badge', text: `${month.logCount} 条日志` }),
-          ]),
-          subjectRows.length
-            ? el(
-              'div',
-              { className: 'subject-bars' },
-              subjectRows.map(([name, mins]) =>
-                el('div', { className: 'subject-row' }, [
-                  el('div', { className: 'subject-name', text: name }),
-                  el('div', { className: 'progress-track' }, [
-                    el('div', {
-                      className: 'progress-fill',
-                      style: { width: `${(mins / subjMax) * 100}%` },
-                    }),
-                  ]),
-                  el('div', { className: 'subject-min', text: `${mins} 分` }),
-                ]),
-              ),
-            )
-            : el('div', { className: 'empty soft', text: '本月还没有日志时长' }),
+      el('section', { className: 'card' }, [
+        el('div', { className: 'card-header' }, [
+          el('h3', { text: '最近雅思 Overall' }),
+          el('span', { className: 'badge accent', text: `${month.ieltsCount} 次本月` }),
         ]),
-
-        el('section', { className: 'card' }, [
-          el('div', { className: 'card-header' }, [
-            el('h3', { text: '最近雅思 Overall' }),
-            el('span', { className: 'badge accent', text: `${month.ieltsCount} 次本月` }),
-          ]),
           recentIelts.length
             ? el(
               'div',
@@ -141,7 +106,6 @@ export function renderStats(root) {
             )
             : el('div', { className: 'empty soft', text: '还没有带 Overall 的成绩' }),
         ]),
-      ]),
 
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [

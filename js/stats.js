@@ -21,7 +21,6 @@ function dayKey(d) {
  */
 export function buildIndexes(data) {
   const focusByDay = new Map();   // date -> minutes (focus sessions only)
-  const logMinByDay = new Map();  // date -> total log minutes
   const activeByDay = new Map();  // date -> true (any activity incl. ielts/tasks)
   const ieltsDates = new Set(data.ielts.map((i) => i.date));
 
@@ -29,18 +28,13 @@ export function buildIndexes(data) {
     if (s.type !== 'focus' || !s.date) continue;
     focusByDay.set(s.date, (focusByDay.get(s.date) || 0) + (s.minutes || 0));
   }
-  for (const l of data.logs) {
-    if (!l.date) continue;
-    logMinByDay.set(l.date, (logMinByDay.get(l.date) || 0) + (l.minutes || 0));
-  }
   for (const t of data.tasks) {
     if (t.done && t.date) activeByDay.set(t.date, true);
   }
   for (const d of focusByDay.keys()) activeByDay.set(d, true);
-  for (const d of logMinByDay.keys()) activeByDay.set(d, true);
   for (const d of ieltsDates) activeByDay.set(d, true);
 
-  return { focusByDay, logMinByDay, activeByDay, ieltsDates };
+  return { focusByDay, activeByDay, ieltsDates };
 }
 
 function isActiveDay(data, date) {
@@ -94,12 +88,10 @@ export function monthSummary(data, ref = new Date()) {
   const m = ref.getMonth();
   const prefix = `${y}-${String(m + 1).padStart(2, '0')}`;
   const focusSessions = data.sessions.filter((s) => s.date.startsWith(prefix) && s.type === 'focus');
-  const logs = data.logs.filter((l) => l.date.startsWith(prefix));
   const ielts = data.ielts.filter((i) => i.date.startsWith(prefix));
   return {
     focusCount: focusSessions.length,
     focusMinutes: focusSessions.reduce((a, s) => a + (s.minutes || 0), 0),
-    logCount: logs.length,
     ieltsCount: ielts.length,
   };
 }
@@ -121,8 +113,7 @@ export function heatmap(data, weeks = 12, end = new Date()) {
     d.setDate(start.getDate() + i);
     const key = dayKey(d);
     const focusMin = idx.focusByDay.get(key) || 0;
-    const logMin = idx.logMinByDay.get(key) || 0;
-    const score = focusMin + logMin + (idx.ieltsDates.has(key) ? 30 : 0);
+    const score = focusMin + (idx.ieltsDates.has(key) ? 30 : 0);
     let level = 0;
     if (score > 0) level = 1;
     if (score >= 30) level = 2;

@@ -21,7 +21,6 @@ const DEFAULT_DATA = () => ({
     ieltsGoals: { listening: null, reading: null, overall: null },
   },
   tasks: [],
-  logs: [],
   sessions: [],
   ielts: [],
 });
@@ -66,7 +65,6 @@ function migrate(raw) {
         : base.settings.subjects,
     },
     tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
-    logs: Array.isArray(raw.logs) ? raw.logs : [],
     sessions: Array.isArray(raw.sessions) ? raw.sessions : [],
     ielts: Array.isArray(raw.ielts) ? raw.ielts : [],
     version: 1,
@@ -182,35 +180,6 @@ export function rolloverOpenTasksToToday() {
   }
   if (n) persist();
   return n;
-}
-
-/* ---- Logs ---- */
-export function addLog({ subject, content, minutes, date = todayStr() }) {
-  const log = {
-    id: uid('l'),
-    date,
-    subject: subject || '其他',
-    content: String(content || '').trim(),
-    minutes: Math.max(0, Number(minutes) || 0),
-    createdAt: new Date().toISOString(),
-  };
-  if (!log.content && !log.minutes) return null;
-  data.logs.unshift(log);
-  persist();
-  return log;
-}
-
-export function updateLog(id, patch) {
-  const l = data.logs.find((x) => x.id === id);
-  if (!l) return;
-  Object.assign(l, patch);
-  if (patch.minutes != null) l.minutes = Math.max(0, Number(patch.minutes) || 0);
-  persist();
-}
-
-export function removeLog(id) {
-  data.logs = data.logs.filter((x) => x.id !== id);
-  persist();
 }
 
 /* ---- Sessions (pomodoro) ---- */

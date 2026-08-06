@@ -26,12 +26,6 @@ export function renderSettings(root, ctx) {
   const longIn = numInput(p.longBreak);
   const everyIn = numInput(p.longEvery);
 
-  const subjectsIn = el('input', {
-    type: 'text',
-    value: data.settings.subjects.join('、'),
-    placeholder: '用顿号或逗号分隔，如：雅思、编程、数学',
-  });
-
   const soundIn = el('input', {
     type: 'checkbox',
     checked: data.settings.sound !== false,
@@ -110,7 +104,7 @@ export function renderSettings(root, ctx) {
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: '设置' }),
-          el('p', { text: '番茄参数、科目、主题与 Gist 云同步。' }),
+          el('p', { text: '番茄参数、主题与 Gist 云同步。' }),
         ]),
       ]),
 
@@ -183,9 +177,7 @@ export function renderSettings(root, ctx) {
       ]),
 
       el('section', { className: 'card form-grid' }, [
-        el('h3', { text: '科目与主题' }),
-        fieldRow('科目标签', subjectsIn),
-        el('p', { className: 'help', text: '用顿号「、」或逗号「,」分隔。' }),
+        el('h3', { text: '主题与外观' }),
         fieldRow('主题', themeSelect),
         el('div', { className: 'form-row inline' }, [
           fieldRow('字号', fontScaleSelect),
@@ -198,12 +190,7 @@ export function renderSettings(root, ctx) {
             className: 'btn btn-primary',
             text: '保存',
             onClick: () => {
-              const subjects = subjectsIn.value
-                .split(/[,，、]/)
-                .map((s) => s.trim())
-                .filter(Boolean);
               updateSettings({
-                subjects: subjects.length ? subjects : ['雅思', '编程', '其他'],
                 theme: themeSelect.value,
                 fontScale: fontScaleSelect.value,
                 density: densitySelect.value,

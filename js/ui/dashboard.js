@@ -16,7 +16,6 @@ export function renderDashboard(root, ctx) {
   const streak = streakDays(data);
   const todayTasks = data.tasks.filter((t) => t.date === today);
   const openTasks = todayTasks.filter((t) => !t.done);
-  const recentLogs = data.logs.filter((l) => l.date === today).slice(0, 3);
   const recentIelts = data.ielts.filter((i) => i.date === today);
   const lastIelts = recentIelts[0] || data.ielts[0];
   const week = weekFocusMinutes(data);
@@ -127,86 +126,49 @@ export function renderDashboard(root, ctx) {
         ]),
       ]),
 
-      el('div', { className: 'grid-2' }, [
-        el('section', { className: 'card' }, [
-          el('div', { className: 'card-header' }, [
-            el('h3', { text: '今日日志' }),
-            el('button', {
-              type: 'button',
-              className: 'btn btn-sm btn-ghost',
-              text: '写日志',
-              onClick: () => ctx.navigate('logs'),
-            }),
-          ]),
-          recentLogs.length
-            ? el(
-              'div',
-              { className: 'list' },
-              recentLogs.map((l) =>
-                el('div', { className: 'list-item compact' }, [
-                  el('div', { className: 'item-body' }, [
-                    el('div', { className: 'item-title' }, [
-                      el('span', { className: 'badge', text: l.subject }),
-                      document.createTextNode(` ${l.content || '（无文字）'}`),
-                    ]),
-                    el('div', {
-                      className: 'item-meta',
-                      text: `${l.minutes || 0} 分钟`,
-                    }),
-                  ]),
-                ]),
-              ),
-            )
-            : el('div', {
-              className: 'empty soft',
-              text: '今天还没写日志 — 学完记一笔更容易坚持',
-            }),
+      el('section', { className: 'card' }, [
+        el('div', { className: 'card-header' }, [
+          el('h3', { text: '雅思' }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-sm btn-ghost',
+            text: '录入',
+            onClick: () => ctx.navigate('ielts'),
+          }),
         ]),
-
-        el('section', { className: 'card' }, [
-          el('div', { className: 'card-header' }, [
-            el('h3', { text: '雅思' }),
-            el('button', {
-              type: 'button',
-              className: 'btn btn-sm btn-ghost',
-              text: '录入',
-              onClick: () => ctx.navigate('ielts'),
-            }),
-          ]),
-          lastIelts
-            ? el('div', { className: 'list' }, [
-              el('div', { className: 'list-item compact' }, [
-                el('div', { className: 'item-body' }, [
-                  el('div', { className: 'item-title' }, [
-                    el('span', {
-                      className: 'badge accent',
-                      text: lastIelts.paper || '未命名',
-                    }),
-                    document.createTextNode(
-                      ` Overall ${formatBand(lastIelts.overall)}`,
-                    ),
-                  ]),
-                  el('div', {
-                    className: 'item-meta',
-                    text: `${lastIelts.date} · L${formatBand(bandOf(lastIelts.listening))} R${formatBand(bandOf(lastIelts.reading))} W${formatBand(bandOf(lastIelts.writing))} S${formatBand(bandOf(lastIelts.speaking))}`,
+        lastIelts
+          ? el('div', { className: 'list' }, [
+            el('div', { className: 'list-item compact' }, [
+              el('div', { className: 'item-body' }, [
+                el('div', { className: 'item-title' }, [
+                  el('span', {
+                    className: 'badge accent',
+                    text: lastIelts.paper || '未命名',
                   }),
+                  document.createTextNode(
+                    ` Overall ${formatBand(lastIelts.overall)}`,
+                  ),
                 ]),
-              ]),
-              recentIelts.length > 0
-                ? el('p', {
-                  className: 'help',
-                  text: `今天已录入 ${recentIelts.length} 次练习`,
-                })
-                : el('p', {
-                  className: 'help',
-                  text: '上面是最近一次成绩，今天还没有新记录',
+                el('div', {
+                  className: 'item-meta',
+                  text: `${lastIelts.date} · L${formatBand(bandOf(lastIelts.listening))} R${formatBand(bandOf(lastIelts.reading))} W${formatBand(bandOf(lastIelts.writing))} S${formatBand(bandOf(lastIelts.speaking))}`,
                 }),
-            ])
-            : el('div', {
-              className: 'empty soft',
-              text: '还没有雅思成绩，做完真题来写一笔 ✍️',
-            }),
-        ]),
+              ]),
+            ]),
+            recentIelts.length > 0
+              ? el('p', {
+                className: 'help',
+                text: `今天已录入 ${recentIelts.length} 次练习`,
+              })
+              : el('p', {
+                className: 'help',
+                text: '上面是最近一次成绩，今天还没有新记录',
+              }),
+          ])
+          : el('div', {
+            className: 'empty soft',
+            text: '还没有雅思成绩，做完真题来写一笔 ✍️',
+          }),
       ]),
     ]),
   );
@@ -370,13 +332,11 @@ function miniWeekBars(week) {
 
 function summaryBanner(data, today) {
   const taskCount = data.tasks.filter((t) => t.date === today && t.done).length;
-  const logCount = data.logs.filter((l) => l.date === today).length;
   const ieltsCount = data.ielts.filter((i) => i.date === today).length;
   const focusCount = data.sessions.filter((s) => s.date === today && s.type === 'focus').length;
   const parts = [];
   if (focusCount) parts.push(`🍅 ${focusCount} 个番茄`);
   if (taskCount) parts.push(`✅ ${taskCount} 项任务`);
-  if (logCount) parts.push(`📝 ${logCount} 条日志`);
   if (ieltsCount) parts.push(`🎯 ${ieltsCount} 次雅思`);
   if (!parts.length) return null;
   return el('div', {
