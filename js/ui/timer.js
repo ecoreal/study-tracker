@@ -1,4 +1,4 @@
-import { el, toast, confirmModal } from './components.js';
+import { el, toast, fieldRow, confirmModal } from './components.js';
 import { getData, updateSettings, todayStr } from '../store.js';
 import * as pomodoro from '../pomodoro.js';
 
@@ -216,10 +216,10 @@ export function renderTimer(root, ctx) {
         ]),
       ]),
       el('div', { className: 'form-row inline' }, [
-        field('默认专注', focusIn),
-        field('默认短休', shortIn),
-        field('默认长休', longIn),
-        field('每 N 个专注后长休', everyIn),
+        fieldRow('默认专注', focusIn),
+        fieldRow('默认短休', shortIn),
+        fieldRow('默认长休', longIn),
+        fieldRow('每 N 个专注后长休', everyIn),
       ]),
       el('div', { className: 'btn-row' }, [
         el('button', {
