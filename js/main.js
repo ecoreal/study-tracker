@@ -1,4 +1,4 @@
-import { getData, subscribe, setOnChangeHook, updateSettings } from './store.js';
+import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary } from './store.js';
 import { schedulePush, initSync, subscribeSync } from './gist.js';
 import { applyTheme, toggleTheme, watchSystemTheme, applyAppearance } from './theme.js';
 import { toast } from './ui/components.js';
@@ -10,6 +10,7 @@ import { renderStats } from './ui/stats-view.js';
 import { renderSettings } from './ui/settings.js';
 import { mountMiniBar } from './ui/mini-bar.js';
 import * as pomodoro from './pomodoro.js';
+import { vocabularyFromJson } from './importer.js';
 
 const VIEWS = {
   dashboard: renderDashboard,
@@ -226,6 +227,27 @@ window.addEventListener('keydown', (e) => {
 readHash();
 paintNav();
 render();
-initSync().catch(() => {});
+initSync()
+  .catch(() => {})
+  .then(() => seedBundledVocabulary())
+  .catch(() => {});
 
 console.info('[study-tracker] ready');
+
+async function seedBundledVocabulary() {
+  const meta = getMeta();
+  if (meta.bundledVocabularyVersion === '538-v1') return;
+  const response = await fetch('./雅思阅读538考点词.json', { cache: 'no-cache' });
+  if (!response.ok) return;
+  const source = await response.json();
+  const words = vocabularyFromJson(source, '雅思阅读538考点词');
+  if (!words.length) return;
+  const result = upsertVocabulary(words);
+  setMeta({
+    bundledVocabularyVersion: '538-v1',
+    bundledVocabularyCount: words.length,
+  });
+  if (result.added || result.updated) {
+    toast(`已自动导入 538 考点词，新增 ${result.added} 个`, 'success');
+  }
+}
