@@ -2411,6 +2411,27 @@ textarea {
   margin-top: 16px;
 }
 
+.review-integration {
+  margin-top: 16px;
+}
+
+.review-integration .card-header {
+  margin: 0;
+}
+
+.integration-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 12px;
+  color: var(--text);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .import-preview,
 .import-preview-counts {
   display: grid;

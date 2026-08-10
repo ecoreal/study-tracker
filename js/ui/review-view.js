@@ -358,6 +358,12 @@ export function renderReviewPanel(container, ctx) {
 export function renderMistakeReviewPanel(container, ctx) {
   const mount = el('div');
   let subject = 'all';
+  const readingFileInput = el('input', {
+    type: 'file',
+    accept: '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    hidden: true,
+  });
+  readingFileInput.addEventListener('change', () => importReadingFile(readingFileInput.files?.[0]));
   container.append(mount);
 
   function paintOverview() {
@@ -379,7 +385,14 @@ export function renderMistakeReviewPanel(container, ctx) {
             disabled: !queue.length,
             onClick: () => startSession(queue),
           }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '导入阅读错题本',
+            onClick: () => readingFileInput.click(),
+          }),
           el('button', { type: 'button', className: 'btn btn-ghost', text: '管理错题本', onClick: ctx.openMistakes }),
+          readingFileInput,
         ]),
       ]),
       el('div', { className: 'review-stats' }, [
@@ -400,7 +413,73 @@ export function renderMistakeReviewPanel(container, ctx) {
         ]),
         el('p', { className: 'muted', text: '复盘后手动选择“已掌握”或“需要再做”，系统只记录真题复盘状态。' }),
       ]),
+      el('section', { className: 'card form-grid review-integration' }, [
+        el('div', { className: 'card-header' }, [
+          el('h3', { text: '爱听写同步' }),
+          el('span', { className: 'badge', text: '需在爱听写页面触发' }),
+        ]),
+        el('p', { className: 'muted', text: '爱听写接口需要你的登录会话，GitHub Pages 无法代替你跨站读取。可先导出 Excel 用上面的入口导入，也可在爱听写页面运行同步助手。' }),
+        el('div', { className: 'btn-row' }, [
+          el('a', {
+            className: 'btn btn-ghost',
+            href: 'https://www.idictation.cn/ielts/read-result/',
+            target: '_blank',
+            rel: 'noopener',
+            text: '打开爱听写阅读结果',
+          }),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '复制同步助手说明',
+            onClick: copyIntegrationGuide,
+          }),
+        ]),
+      ]),
     );
+  }
+
+  async function importReadingFile(file) {
+    if (!file) return;
+    readingFileInput.value = '';
+    try {
+      const parsed = await parseStudyFile(file);
+      const mistakes = parsed.mistakes.filter((item) => item.subject === 'reading');
+      if (!mistakes.length) {
+        toast('这个文件没有识别到阅读错题，请选择阅读错题本.xlsx', 'error');
+        return;
+      }
+      const ok = await modal({
+        title: '导入阅读错题本',
+        size: 'md',
+        confirmText: '导入真题复盘',
+        body: el('div', { className: 'import-preview' }, [
+          el('div', { className: 'import-preview-counts' }, [
+            el('div', {}, [el('strong', { text: String(mistakes.length) }), el('span', { text: '阅读错题' })]),
+            el('div', {}, [el('strong', { text: '独立' }), el('span', { text: '手动复盘流程' })]),
+          ]),
+          el('p', { className: 'muted', text: file.name }),
+        ]),
+      });
+      if (!ok) return;
+      ctx.suppressNextStoreRender();
+      const result = importIeltsMistakes(mistakes);
+      toast(`阅读错题已导入：新增 ${result.added} 道`, 'success');
+      paintOverview();
+    } catch (error) {
+      toast(`${file.name}：${error.message}`, 'error');
+    }
+  }
+
+  async function copyIntegrationGuide() {
+    const guide = '在爱听写阅读结果页打开浏览器控制台，执行：\n' +
+      "fetch('https://ecoreal.github.io/study-tracker/js/idictation-bridge.js?v=1').then(r => r.text()).then(eval)\n" +
+      '同步完成后切回 Study Tracker；也可以直接导出阅读错题本.xlsx，再点击“导入阅读错题本”。';
+    try {
+      await navigator.clipboard.writeText(guide);
+      toast('同步助手说明已复制', 'success');
+    } catch {
+      modal({ title: '爱听写同步助手', size: 'md', body: el('pre', { className: 'integration-code', text: guide }), confirmText: '关闭' });
+    }
   }
 
   function stat(label, value, sub) {

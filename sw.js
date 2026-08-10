@@ -8,7 +8,7 @@
 // Relative paths so precaching works on GitHub Pages project sites
 // served under a subdirectory (e.g. /study-tracker/) — they resolve
 // against the SW script's own location, not the origin root.
-const CACHE = 'study-tracker-v9';
+const CACHE = 'study-tracker-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -32,8 +32,10 @@ const ASSETS = [
   './js/ui/stats-view.js',
   './js/ui/settings.js',
   './js/ui/mini-bar.js',
+  './js/idictation-bridge.js',
   './manifest.json',
   './雅思阅读538考点词.json',
+  './data/阅读错题本.json',
 ];
 
 self.addEventListener('install', (e) => {

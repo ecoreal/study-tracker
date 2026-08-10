@@ -1,4 +1,4 @@
-import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary } from './store.js';
+import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary, importIeltsMistakes } from './store.js';
 import { schedulePush, initSync, subscribeSync } from './gist.js';
 import { applyTheme, toggleTheme, watchSystemTheme, applyAppearance } from './theme.js';
 import { toast } from './ui/components.js';
@@ -133,6 +133,21 @@ window.addEventListener('hashchange', () => {
   if (previous !== currentView || document.body.dataset.view !== currentView) render();
 });
 
+// Optional same-session bridge from the logged-in iDictation page. The bridge
+// runs on iDictation's own origin, then sends normalized reading mistakes here.
+window.addEventListener('message', (event) => {
+  if (event.origin !== 'https://www.idictation.cn') return;
+  const payload = event.data;
+  if (!payload || payload.type !== 'study-tracker:reading-mistakes' || !Array.isArray(payload.records)) return;
+  const records = payload.records.filter((record) => record && typeof record === 'object');
+  if (!records.length) {
+    toast('爱听写没有返回可导入的阅读错题', 'error');
+    return;
+  }
+  const result = importIeltsMistakes(records.map((record) => ({ ...record, subject: 'reading' })));
+  toast(`已从爱听写同步阅读错题：新增 ${result.added} 道`, result.added ? 'success' : 'info');
+});
+
 window.addEventListener('popstate', () => {
   const previous = currentView;
   readHash();
@@ -230,6 +245,7 @@ render();
 initSync()
   .catch(() => {})
   .then(() => seedBundledVocabulary())
+  .then(() => seedBundledReadingMistakes())
   .catch(() => {});
 
 console.info('[study-tracker] ready');
@@ -249,5 +265,23 @@ async function seedBundledVocabulary() {
   });
   if (result.added || result.updated) {
     toast(`已自动导入 538 考点词，新增 ${result.added} 个`, 'success');
+  }
+}
+
+async function seedBundledReadingMistakes() {
+  const meta = getMeta();
+  if (meta.bundledReadingMistakesVersion === 'reading-xlsx-v1') return;
+  const response = await fetch('./data/阅读错题本.json', { cache: 'no-cache' });
+  if (!response.ok) return;
+  const payload = await response.json();
+  const records = Array.isArray(payload) ? payload : payload.records;
+  if (!Array.isArray(records) || !records.length) return;
+  const result = importIeltsMistakes(records);
+  setMeta({
+    bundledReadingMistakesVersion: 'reading-xlsx-v1',
+    bundledReadingMistakesCount: records.length,
+  });
+  if (result.added || result.updated) {
+    toast(`已导入阅读错题本，新增 ${result.added} 道`, 'success');
   }
 }
