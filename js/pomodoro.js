@@ -10,6 +10,10 @@ const MODE_LABELS = {
   long: '长休息',
 };
 
+const STATE_KEY = 'study-tracker:pomodoro';
+const MAX_DURATION_MS = 180 * 60 * 1000;
+let expiredOnLoad = false;
+
 /** @type {{
  *  mode: 'focus'|'short'|'long',
  *  running: boolean,
@@ -18,16 +22,9 @@ const MODE_LABELS = {
  *  focusCount: number,
  *  taskId: string|null,
  *  endsAt: number|null,
+ *  cycleDate: string,
  * }} */
-let state = {
-  mode: 'focus',
-  running: false,
-  remainingMs: 25 * 60 * 1000,
-  totalMs: 25 * 60 * 1000,
-  focusCount: 0,
-  taskId: null,
-  endsAt: null,
-};
+let state = loadState();
 
 /** @type {Set<(s: typeof state) => void>} */
 const listeners = new Set();
@@ -44,6 +41,68 @@ function durationMs(mode) {
   if (mode === 'focus') return p.focus * 60 * 1000;
   if (mode === 'short') return p.shortBreak * 60 * 1000;
   return p.longBreak * 60 * 1000;
+}
+
+function freshState() {
+  const totalMs = durationMs('focus');
+  return {
+    mode: 'focus',
+    running: false,
+    remainingMs: totalMs,
+    totalMs,
+    focusCount: 0,
+    taskId: null,
+    endsAt: null,
+    cycleDate: todayStr(),
+  };
+}
+
+function loadState() {
+  const fallback = freshState();
+  try {
+    const saved = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    if (!saved || typeof saved !== 'object') return fallback;
+    const mode = ['focus', 'short', 'long'].includes(saved.mode) ? saved.mode : 'focus';
+    const totalMs = clampMs(saved.totalMs, durationMs(mode));
+    const running = Boolean(saved.running && Number.isFinite(Number(saved.endsAt)));
+    const endsAt = running ? Number(saved.endsAt) : null;
+    const remainingMs = running
+      ? Math.max(0, endsAt - Date.now())
+      : Math.min(totalMs, Math.max(0, Number(saved.remainingMs) || totalMs));
+    if (running && remainingMs === 0) expiredOnLoad = true;
+    const sameDay = saved.cycleDate === todayStr();
+    return {
+      mode,
+      running,
+      remainingMs,
+      totalMs,
+      focusCount: sameDay || running ? Math.max(0, Math.round(Number(saved.focusCount) || 0)) : 0,
+      taskId: typeof saved.taskId === 'string' && saved.taskId ? saved.taskId : null,
+      endsAt,
+      cycleDate: sameDay || running ? (saved.cycleDate || todayStr()) : todayStr(),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function clampMs(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_DURATION_MS, Math.max(60 * 1000, Math.round(n)));
+}
+
+function persistState() {
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  } catch { /* localStorage may be unavailable */ }
+}
+
+function ensureCycleDate() {
+  const today = todayStr();
+  if (state.cycleDate === today) return;
+  state.cycleDate = today;
+  state.focusCount = 0;
 }
 
 function emit() {
@@ -66,6 +125,7 @@ export function setOnComplete(fn) {
 
 export function setTaskId(taskId) {
   state.taskId = taskId || null;
+  persistState();
   emit();
 }
 
@@ -79,6 +139,7 @@ export function setMode(mode, { reset = true } = {}) {
     state.totalMs = durationMs(mode);
     state.remainingMs = state.totalMs;
   }
+  persistState();
   emit();
   updateTitle();
 }
@@ -87,6 +148,7 @@ export function reloadDurationsIfIdle() {
   if (state.running) return;
   state.totalMs = durationMs(state.mode);
   state.remainingMs = state.totalMs;
+  persistState();
   emit();
   updateTitle();
 }
@@ -98,18 +160,22 @@ export function setCustomDuration(minutes) {
   state.totalMs = m * 60 * 1000;
   state.remainingMs = state.totalMs;
   state.endsAt = null;
+  persistState();
   emit();
   updateTitle();
   return true;
 }
 
 export function start() {
+  if (state.running) return;
+  ensureCycleDate();
   if (state.remainingMs <= 0) {
     state.remainingMs = durationMs(state.mode);
     state.totalMs = state.remainingMs;
   }
   state.running = true;
   state.endsAt = Date.now() + state.remainingMs;
+  persistState();
   startTick();
   emit();
   requestNotifyPermission();
@@ -121,6 +187,7 @@ export function pause() {
   state.running = false;
   state.endsAt = null;
   stopTick();
+  persistState();
   emit();
   updateTitle();
 }
@@ -136,8 +203,17 @@ export function reset() {
   state.endsAt = null;
   state.totalMs = durationMs(state.mode);
   state.remainingMs = state.totalMs;
+  persistState();
   emit();
   updateTitle();
+}
+
+export function clearState() {
+  stopTick();
+  state = freshState();
+  persistState();
+  emit();
+  updateTitle(true);
 }
 
 export function skip() {
@@ -174,10 +250,10 @@ function completeCurrent({ skipped }) {
   stopTick();
   const plannedMin = Math.round(state.totalMs / 60000);
   const elapsedMin = Math.max(
-    1,
+    0,
     Math.round((state.totalMs - Math.max(0, state.remainingMs)) / 60000),
   );
-  const minutes = skipped ? Math.max(1, elapsedMin) : plannedMin;
+  const minutes = skipped ? elapsedMin : plannedMin;
   const type = state.mode === 'focus' ? 'focus' : state.mode === 'short' ? 'short' : 'long';
 
   let session = null;
@@ -213,6 +289,8 @@ function completeCurrent({ skipped }) {
   state.mode = next;
   state.totalMs = durationMs(next);
   state.remainingMs = state.totalMs;
+  state.cycleDate = todayStr();
+  persistState();
   emit();
   updateTitle(true);
 
@@ -289,6 +367,12 @@ export function formatMs(ms) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// Init duration from settings
-state.totalMs = durationMs('focus');
-state.remainingMs = state.totalMs;
+if (expiredOnLoad) {
+  queueMicrotask(() => completeCurrent({ skipped: false }));
+} else if (state.running) {
+  startTick();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', persistState);
+}

@@ -34,6 +34,8 @@ const TOAST_ICONS = {
 };
 
 const MAX_TOASTS = 3;
+let controlId = 0;
+let dialogId = 0;
 
 export function toast(message, type = 'info') {
   const root = document.getElementById('toast-root');
@@ -102,6 +104,7 @@ export function dateInputValue(d = new Date()) {
  *   size?: 'sm'|'md'|'lg'|'xl',   // 默认 md(440px)；lg=640px；xl=860px
  *   draggable?: boolean,          // 默认 true
  *   rememberPos?: boolean,        // 默认 true，记住拖动位置
+ *   confirmOnEnter?: boolean,
  * }} opts
  * @returns {Promise<boolean>} true if confirmed
  */
@@ -112,15 +115,23 @@ export function modal(opts = {}) {
     const rememberPos = opts.rememberPos !== false;
     const posKey = `modal-pos:${opts.title || 'default'}`;
     const savedPos = rememberPos ? (() => { try { return JSON.parse(localStorage.getItem(posKey) || 'null'); } catch { return null; } })() : null;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const titleId = `dialog-title-${++dialogId}`;
+    let closed = false;
 
-    const backdrop = el('div', { className: 'modal-backdrop', role: 'dialog', 'aria-modal': 'true' });
-    const panel = el('div', { className: `modal-panel modal-${size}` }, [
+    const backdrop = el('div', { className: 'modal-backdrop' });
+    const panel = el('div', {
+      className: `modal-panel modal-${size}`,
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': titleId,
+    }, [
       el('div', { className: 'modal-header', dataset: { drag: 'handle' } }, [
-        el('h3', { text: opts.title || '提示' }),
+        el('h3', { id: titleId, text: opts.title || '提示' }),
         el('div', { className: 'modal-header-actions' }, [
           el('button', {
             type: 'button',
-            className: 'btn btn-ghost btn-icon btn-sm',
+            className: 'btn btn-ghost btn-icon btn-sm modal-close',
             'aria-label': '关闭',
             text: '×',
             onClick: () => close(false),
@@ -145,6 +156,7 @@ export function modal(opts = {}) {
     ]);
     backdrop.append(panel);
     document.body.append(backdrop);
+    document.body.classList.add('modal-open');
     requestAnimationFrame(() => backdrop.classList.add('show'));
 
     // ——— 拖拽（仅桌面端，触屏设备跳过） ———
@@ -190,17 +202,35 @@ export function modal(opts = {}) {
     }
 
     // 恢复保存的位置
-    if (savedPos && savedPos.left && savedPos.top) {
+    if (window.innerWidth >= 768 && savedPos && savedPos.left && savedPos.top) {
       panel.style.left = savedPos.left;
       panel.style.top = savedPos.top;
       panel.style.margin = '0';
     }
 
     function onKey(e) {
-      if (e.key === 'Escape') close(false);
-      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(false);
+      }
+      if (e.key === 'Enter' && opts.confirmOnEnter && e.target.tagName !== 'TEXTAREA') {
         e.preventDefault();
         close(true);
+      }
+      if (e.key === 'Tab') {
+        const focusable = [...panel.querySelectorAll(
+          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        )].filter((node) => node.offsetParent !== null);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     }
     document.addEventListener('keydown', onKey);
@@ -210,14 +240,19 @@ export function modal(opts = {}) {
     });
 
     function close(ok) {
+      if (closed) return;
+      closed = true;
       document.removeEventListener('keydown', onKey);
       backdrop.classList.remove('show');
-      setTimeout(() => backdrop.remove(), 150);
+      document.body.classList.remove('modal-open');
+      setTimeout(() => {
+        backdrop.remove();
+        if (previousFocus?.isConnected) previousFocus.focus();
+      }, 150);
       resolve(ok);
     }
 
-    // focus first input
-    const focusable = panel.querySelector('input, textarea, select, button');
+    const focusable = panel.querySelector('input, textarea, select, button:not(.modal-close)');
     if (focusable) setTimeout(() => focusable.focus(), 50);
   });
 }
@@ -230,10 +265,9 @@ export async function promptModal({ title, label, value = '', placeholder = '', 
   // set value via property after create for textarea
   input.value = value;
   const body = el('div', { className: 'form-grid' }, [
-    label ? el('label', { text: label }) : null,
-    input,
+    label ? fieldRow(label, input) : input,
   ]);
-  const ok = await modal({ title, body, confirmText: '保存' });
+  const ok = await modal({ title, body, confirmText: '保存', confirmOnEnter: !multiline });
   if (!ok) return null;
   return input.value;
 }
@@ -250,7 +284,11 @@ export function confirmModal({ title = '确认', message, confirmText = '确定'
 
 /** Standard form-row: label + control. */
 export function fieldRow(label, control) {
-  return el('div', { className: 'form-row' }, [el('label', { text: label }), control]);
+  if (!control.id) control.id = `field-${++controlId}`;
+  return el('div', { className: 'form-row' }, [
+    el('label', { for: control.id, text: label }),
+    control,
+  ]);
 }
 
 export function progressBar(ratio, { label = '', className = '' } = {}) {

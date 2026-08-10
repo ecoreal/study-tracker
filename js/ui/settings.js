@@ -124,10 +124,6 @@ export function renderSettings(root, ctx) {
           autoStartIn,
           el('label', { text: '结束后自动开始下一阶段' }),
         ]),
-        el('p', {
-          className: 'help',
-          text: '快捷键：在非输入框时按空格 = 开始/暂停番茄钟。',
-        }),
         el('div', { className: 'btn-row' }, [
           el('button', {
             type: 'button',
@@ -355,6 +351,8 @@ export function renderSettings(root, ctx) {
                 try {
                   const text = await file.text();
                   importJson(text);
+                  pomodoro.setTaskId(null);
+                  pomodoro.reloadDurationsIfIdle();
                   toast('导入成功', 'success');
                   ctx.refresh();
                 } catch (err) {
@@ -377,6 +375,7 @@ export function renderSettings(root, ctx) {
               });
               if (!ok) return;
               clearAllLocalData();
+              pomodoro.clearState();
               toast('本地数据已清空', 'info');
               ctx.refresh();
             },
@@ -384,35 +383,6 @@ export function renderSettings(root, ctx) {
         ]),
       ]),
 
-      el('section', { className: 'card' }, [
-        el('h3', { text: '使用说明' }),
-        el('div', { className: 'help' }, [
-          el('p', {
-            text: '1. 日常在「今日 / 任务 / 日志 / 雅思 / 番茄钟」记录学习。',
-          }),
-          el('p', {
-            text: '2. 在设置中粘贴 gist 权限的 PAT 并连接，数据会同步到私有 Gist。',
-          }),
-          el('p', {
-            text: '3. 换设备：打开同一 GitHub Pages 地址 → 设置里填同一个 PAT → 连接后自动找到 study-tracker-data Gist。',
-          }),
-          el('p', {
-            text: '4. 站点地址：https://ecoreal.github.io/study-tracker/',
-          }),
-        ]),
-        el('div', { className: 'help', style: { marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px' } }, [
-          el('strong', { text: '键盘快捷键：' }),
-          el('br'),
-          el('span', { text: '空格 — 开始/暂停番茄钟 · ' }),
-          el('span', { text: 'd — 今日看板 · ' }),
-          el('span', { text: 't — 番茄钟 · ' }),
-          el('span', { text: 'k — 任务 · ' }),
-          el('span', { text: 'l — 日志 · ' }),
-          el('span', { text: 'i — 雅思 · ' }),
-          el('span', { text: 'a — 统计 · ' }),
-          el('span', { text: 's — 设置' }),
-        ]),
-      ]),
     ]),
   );
 }

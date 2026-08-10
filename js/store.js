@@ -288,7 +288,6 @@ export function clearAllLocalData() {
   data = DEFAULT_DATA();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   for (const fn of listeners) fn(data);
-  if (onChangeHook) onChangeHook(data);
 }
 
 export function normalizeIelts(entry, { ensureIds = true } = {}) {

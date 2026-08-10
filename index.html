@@ -2,9 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="description" content="学习记录 · 番茄钟 · 雅思得分 · GitHub Gist 同步" />
   <meta name="theme-color" content="#0f766e" />
+  <meta name="color-scheme" content="light dark" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="manifest" href="manifest.json" />
@@ -23,18 +24,18 @@
         </div>
       </div>
       <div class="topbar-right">
-        <div id="sync-status" class="sync-status" title="同步状态">未连接</div>
+        <button type="button" id="sync-status" class="sync-status" title="打开同步设置">未连接</button>
         <button type="button" id="theme-toggle" class="btn btn-ghost btn-icon" aria-label="切换主题" title="切换主题">◐</button>
       </div>
     </header>
 
     <nav class="nav" id="main-nav" aria-label="主导航">
-      <button type="button" class="nav-item active" data-view="dashboard"><span class="nav-ico" aria-hidden="true">🏠</span>今日</button>
-      <button type="button" class="nav-item" data-view="timer"><span class="nav-ico" aria-hidden="true">🍅</span>番茄钟</button>
-      <button type="button" class="nav-item" data-view="tasks"><span class="nav-ico" aria-hidden="true">✅</span>任务</button>
-      <button type="button" class="nav-item" data-view="ielts"><span class="nav-ico" aria-hidden="true">🎯</span>雅思</button>
-      <button type="button" class="nav-item" data-view="stats"><span class="nav-ico" aria-hidden="true">📊</span>统计</button>
-      <button type="button" class="nav-item" data-view="settings"><span class="nav-ico" aria-hidden="true">⚙️</span>设置</button>
+      <button type="button" class="nav-item active" data-view="dashboard" aria-keyshortcuts="d"><span class="nav-ico" aria-hidden="true">⌂</span><span class="nav-label">今日</span></button>
+      <button type="button" class="nav-item" data-view="timer" aria-keyshortcuts="t"><span class="nav-ico" aria-hidden="true">◷</span><span class="nav-label">番茄钟</span></button>
+      <button type="button" class="nav-item" data-view="tasks" aria-keyshortcuts="k"><span class="nav-ico" aria-hidden="true">✓</span><span class="nav-label">任务</span></button>
+      <button type="button" class="nav-item" data-view="ielts" aria-keyshortcuts="i"><span class="nav-ico" aria-hidden="true">◎</span><span class="nav-label">雅思</span></button>
+      <button type="button" class="nav-item" data-view="stats" aria-keyshortcuts="a"><span class="nav-ico" aria-hidden="true">▥</span><span class="nav-label">统计</span></button>
+      <button type="button" class="nav-item" data-view="settings" aria-keyshortcuts="s"><span class="nav-ico" aria-hidden="true">⚙</span><span class="nav-label">设置</span></button>
     </nav>
 
     <main id="view-root" class="view-root">

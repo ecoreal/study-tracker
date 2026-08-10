@@ -199,22 +199,11 @@ export function renderTimer(root, ctx) {
       ...tasks.map((t) => el('option', { value: t.id, text: t.text })),
     ],
   );
+  taskSelect.value = pomodoro.getState().taskId || '';
 
-  const side = el('section', { className: 'card' }, [
-    el('h3', { text: '时长设置' }),
-    el('div', { className: 'form-grid' }, [
-      el('div', { className: 'form-row' }, [
-        el('label', { text: '本轮分钟（仅当前阶段）' }),
-        el('div', { className: 'btn-row' }, [
-          customRoundIn,
-          el('button', {
-            type: 'button',
-            className: 'btn btn-primary btn-sm',
-            text: '应用本轮',
-            onClick: applyCustomRound,
-          }),
-        ]),
-      ]),
+  const advancedSettings = el('details', { className: 'timer-advanced' }, [
+    el('summary', { text: '默认时长与周期' }),
+    el('div', { className: 'form-grid timer-advanced-body' }, [
       el('div', { className: 'form-row inline' }, [
         fieldRow('默认专注', focusIn),
         fieldRow('默认短休', shortIn),
@@ -225,59 +214,64 @@ export function renderTimer(root, ctx) {
         el('button', {
           type: 'button',
           className: 'btn btn-primary btn-sm',
-          text: '保存为默认',
+          text: '保存默认设置',
           onClick: () => applySavedDurations({ toastOk: true }),
         }),
       ]),
       el('div', { className: 'form-row' }, [
         el('label', { text: '专注快捷' }),
-        el(
-          'div',
-          { className: 'btn-row presets' },
-          FOCUS_PRESETS.map((m) =>
-            el('button', {
-              type: 'button',
-              className: 'btn btn-ghost btn-sm',
-              text: `${m} 分`,
-              onClick: () => setPreset('focus', m),
-            }),
-          ),
-        ),
+        el('div', { className: 'btn-row presets' }, FOCUS_PRESETS.map((m) =>
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            text: `${m} 分`,
+            onClick: () => setPreset('focus', m),
+          }),
+        )),
       ]),
       el('div', { className: 'form-row' }, [
         el('label', { text: '短休快捷' }),
-        el(
-          'div',
-          { className: 'btn-row presets' },
-          SHORT_PRESETS.map((m) =>
-            el('button', {
-              type: 'button',
-              className: 'btn btn-ghost btn-sm',
-              text: `${m} 分`,
-              onClick: () => setPreset('short', m),
-            }),
-          ),
-        ),
+        el('div', { className: 'btn-row presets' }, SHORT_PRESETS.map((m) =>
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            text: `${m} 分`,
+            onClick: () => setPreset('short', m),
+          }),
+        )),
       ]),
       el('div', { className: 'form-row' }, [
         el('label', { text: '长休快捷' }),
-        el(
-          'div',
-          { className: 'btn-row presets' },
-          LONG_PRESETS.map((m) =>
-            el('button', {
-              type: 'button',
-              className: 'btn btn-ghost btn-sm',
-              text: `${m} 分`,
-              onClick: () => setPreset('long', m),
-            }),
-          ),
-        ),
+        el('div', { className: 'btn-row presets' }, LONG_PRESETS.map((m) =>
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost btn-sm',
+            text: `${m} 分`,
+            onClick: () => setPreset('long', m),
+          }),
+        )),
       ]),
       durationHint,
+    ]),
+  ]);
+
+  const side = el('section', { className: 'card timer-plan' }, [
+    el('div', { className: 'card-header' }, [
+      el('h3', { text: '本轮计划' }),
+    ]),
+    el('div', { className: 'form-grid' }, [
+      fieldRow('关联今日任务', taskSelect),
       el('div', { className: 'form-row' }, [
-        el('label', { text: '关联今日任务' }),
-        taskSelect,
+        el('label', { text: '本轮分钟' }),
+        el('div', { className: 'btn-row' }, [
+          customRoundIn,
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary btn-sm',
+            text: '应用本轮',
+            onClick: applyCustomRound,
+          }),
+        ]),
       ]),
       el('div', { className: 'form-row' }, [
         el('label', { text: '今日已完成专注' }),
@@ -287,6 +281,7 @@ export function renderTimer(root, ctx) {
           text: '',
         }),
       ]),
+      advancedSettings,
     ]),
   ]);
 
@@ -317,7 +312,7 @@ export function renderTimer(root, ctx) {
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: '番茄钟' }),
-          el('p', { text: '可自定义专注/休息时长；结束时桌面通知（需授权）。' }),
+          el('p', { text: '专注与休息，按自己的节奏来。' }),
         ]),
       ]),
       el('div', { className: 'timer-layout' }, [panel, side]),
@@ -341,7 +336,13 @@ export function renderTimer(root, ctx) {
         : '已暂停';
 
     const toggle = controls.querySelector('[data-role="toggle"]');
-    if (toggle) toggle.textContent = st.running ? '暂停' : '开始';
+    if (toggle) toggle.textContent = st.running
+      ? '暂停'
+      : st.remainingMs < st.totalMs
+        ? '继续'
+        : '开始';
+
+    if (taskSelect.value !== (st.taskId || '')) taskSelect.value = st.taskId || '';
 
     modeTabs.querySelectorAll('[data-mode]').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.mode === st.mode);

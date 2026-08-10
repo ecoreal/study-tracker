@@ -34,8 +34,15 @@ const miniMount = document.getElementById('mini-bar-root');
 const ctx = {
   navigate(view) {
     if (!VIEWS[view]) return;
+    if (currentView === view && document.body.dataset.view === view) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     currentView = view;
-    location.hash = view === 'dashboard' ? '' : view;
+    const nextUrl = view === 'dashboard'
+      ? `${location.pathname}${location.search}`
+      : `#${view}`;
+    history.pushState(null, '', nextUrl);
     paintNav();
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -51,7 +58,10 @@ const ctx = {
 
 function paintNav() {
   nav.querySelectorAll('.nav-item').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.view === currentView);
+    const active = btn.dataset.view === currentView;
+    btn.classList.toggle('active', active);
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
   });
 }
 
@@ -107,9 +117,30 @@ nav.addEventListener('click', (e) => {
 });
 
 window.addEventListener('hashchange', () => {
+  const previous = currentView;
   readHash();
   paintNav();
-  render();
+  if (previous !== currentView || document.body.dataset.view !== currentView) render();
+});
+
+window.addEventListener('popstate', () => {
+  const previous = currentView;
+  readHash();
+  paintNav();
+  if (previous !== currentView || document.body.dataset.view !== currentView) render();
+});
+
+nav.addEventListener('keydown', (e) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const items = [...nav.querySelectorAll('.nav-item')];
+  const current = Math.max(0, items.indexOf(document.activeElement));
+  let next = current;
+  if (e.key === 'ArrowLeft') next = (current - 1 + items.length) % items.length;
+  if (e.key === 'ArrowRight') next = (current + 1) % items.length;
+  if (e.key === 'Home') next = 0;
+  if (e.key === 'End') next = items.length - 1;
+  e.preventDefault();
+  items[next].focus();
 });
 
 // Theme & appearance
@@ -121,6 +152,7 @@ themeBtn.addEventListener('click', () => {
   updateSettings({ theme: next });
   applyTheme(next);
 });
+syncEl.addEventListener('click', () => ctx.navigate('settings'));
 
 // Sync status chip
 subscribeSync((s) => {
@@ -132,7 +164,7 @@ subscribeSync((s) => {
   else if (s.status === 'busy') syncEl.classList.add('busy');
   syncEl.title = s.lastSync
     ? `上次同步：${new Date(s.lastSync).toLocaleString()}`
-    : '同步状态';
+    : '打开同步设置';
 });
 
 // Data change → re-render + debounced gist push

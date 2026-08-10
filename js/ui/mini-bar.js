@@ -3,6 +3,7 @@
  */
 
 import { el } from './components.js';
+import { getData } from '../store.js';
 import * as pomodoro from '../pomodoro.js';
 
 /**
@@ -12,6 +13,7 @@ import * as pomodoro from '../pomodoro.js';
 export function mountMiniBar(mount, ctx) {
   const timeEl = el('span', { className: 'mini-time', text: '25:00' });
   const modeEl = el('span', { className: 'mini-mode', text: '专注' });
+  const taskEl = el('span', { className: 'mini-task', hidden: true });
   const statusDot = el('span', { className: 'mini-dot' });
 
   const toggleBtn = el('button', {
@@ -24,14 +26,18 @@ export function mountMiniBar(mount, ctx) {
     },
   });
 
+  const openArea = el('button', {
+    type: 'button',
+    className: 'mini-open-area',
+    title: '打开番茄钟',
+    'aria-label': '打开番茄钟',
+    onClick: () => ctx.navigate('timer'),
+  }, [statusDot, modeEl, taskEl, timeEl]);
+
   const bar = el('div', {
     className: 'mini-bar hidden',
-    title: '点击打开番茄钟 · 空格键开始/暂停',
-    onClick: () => ctx.navigate('timer'),
   }, [
-    statusDot,
-    modeEl,
-    timeEl,
+    openArea,
     toggleBtn,
     el('button', {
       type: 'button',
@@ -47,16 +53,24 @@ export function mountMiniBar(mount, ctx) {
   mount.replaceChildren(bar);
 
   return pomodoro.subscribePomodoro((st) => {
-    // Show when running, paused mid-round, or always when not on timer? Prefer always subtle, emphasize when active.
     const idleFresh = !st.running && st.remainingMs === st.totalMs;
-    bar.classList.toggle('hidden', idleFresh && false); // always show for discoverability
+    bar.hidden = idleFresh;
+    mount.classList.toggle('is-visible', !idleFresh);
+    document.body.classList.toggle('mini-timer-visible', !idleFresh);
     bar.classList.toggle('running', st.running);
     bar.classList.toggle('paused', !st.running && st.remainingMs < st.totalMs);
     bar.classList.toggle('mode-short', st.mode === 'short');
     bar.classList.toggle('mode-long', st.mode === 'long');
 
     modeEl.textContent = st.modeLabel;
+    const task = st.taskId
+      ? (getData().tasks.find((item) => item.id === st.taskId) || null)
+      : null;
+    taskEl.textContent = task?.text || '';
+    taskEl.hidden = !task;
     timeEl.textContent = pomodoro.formatMs(st.remainingMs);
     toggleBtn.textContent = st.running ? '暂停' : st.remainingMs < st.totalMs ? '继续' : '开始';
+    openArea.title = task ? `${task.text} · 打开番茄钟` : '打开番茄钟';
+    openArea.setAttribute('aria-label', task ? `${task.text}，打开番茄钟` : '打开番茄钟');
   });
 }
