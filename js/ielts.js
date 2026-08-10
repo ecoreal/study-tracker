@@ -144,6 +144,7 @@ export function normalizeMistake(m, defaultPart = null) {
       externalRef: '',
       source: '',
       review: null,
+      mistakeReview: null,
       createdAt: '',
     };
   }
@@ -163,7 +164,21 @@ export function normalizeMistake(m, defaultPart = null) {
     externalRef: String(m.externalRef ?? '').trim(),
     source: String(m.source ?? '').trim(),
     review: m.review && typeof m.review === 'object' ? { ...m.review } : null,
+    mistakeReview: normalizeMistakeReview(m.mistakeReview),
     createdAt: m.createdAt || '',
+  };
+}
+
+function normalizeMistakeReview(value) {
+  if (!value || typeof value !== 'object') return null;
+  const status = ['unreviewed', 'practice', 'reviewed'].includes(value.status)
+    ? value.status
+    : 'unreviewed';
+  return {
+    status,
+    lastReviewedAt: value.lastReviewedAt || null,
+    reviewCount: Math.max(0, Math.round(Number(value.reviewCount) || 0)),
+    nextPracticeDate: status === 'practice' ? (value.nextPracticeDate || null) : null,
   };
 }
 

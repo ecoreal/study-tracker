@@ -176,7 +176,10 @@ function normalizeDate(value) {
 }
 
 function sourceLabel(fileName) {
-  return String(fileName || '导入词书').replace(/\.(json|xlsx?|csv)$/i, '').trim();
+  const label = String(fileName || '导入词书').replace(/\.(json|xlsx?|csv)$/i, '').trim();
+  if (/阅读错题本/i.test(label)) return '爱听写 · 阅读错题';
+  if (/^错题本$/i.test(label)) return '爱听写 · 听力错词';
+  return label;
 }
 
 function loadXlsx() {

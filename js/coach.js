@@ -47,10 +47,15 @@ export function buildCoachPlan(data, now = new Date()) {
   let actionTask = null;
 
   if (review.scheduledDue > 0) {
-    headline = `${review.scheduledDue} 项记忆已经到期`;
-    detail = `先完成到期复习，再加入最多 ${review.newAvailable} 项新内容，避免短板重新遗忘。`;
+    headline = `${review.scheduledDue} 个词汇已经到期`;
+    detail = `先完成词汇到期复习；新词不设每日上限，可以在本轮继续学习。`;
     action = 'review';
-    actionLabel = '开始复习';
+    actionLabel = '开始词汇复习';
+  } else if (review.mistakeReview?.due > 0) {
+    headline = `${review.mistakeReview.due} 道真题需要复盘`;
+    detail = `${review.mistakeReview.unreviewed} 道尚未复盘，${review.mistakeReview.practiceDue} 道到了再做时间。先复盘错因和正确答案。`;
+    action = 'mistake-review';
+    actionLabel = '开始真题复盘';
   } else if (overdueTasks.length) {
     headline = `有 ${overdueTasks.length} 项任务需要重新安排`;
     detail = '先把逾期项带回今天，再逐项确认是否继续，避免旧计划被遗忘。';
@@ -63,8 +68,8 @@ export function buildCoachPlan(data, now = new Date()) {
     actionLabel = `开始 ${suggestedRound} 分钟`;
     actionTask = nextTask;
   } else if (review.todayDue > 0 && !nextTask) {
-    headline = `今天学习 ${review.todayDue} 项新内容`;
-    detail = '新内容会根据你的回忆难度自动安排下一次出现时间。';
+    headline = `今天学习 ${review.todayDue} 个新词`;
+    detail = '新词会根据你的回忆难度自动安排下一次出现时间。';
     action = 'review';
     actionLabel = '开始记忆';
   } else if (!todayTasks.length && focusToday === 0) {
@@ -94,7 +99,8 @@ export function buildCoachPlan(data, now = new Date()) {
   if (weakestIelts) {
     signals.push(`雅思优先补 ${weakestIelts.label}`);
   }
-  if (review.todayDue > 0) signals.push(`今日记忆 ${review.todayDue} 项`);
+  if (review.todayDue > 0) signals.push(`今日词汇 ${review.todayDue} 个`);
+  if (review.mistakeReview?.due > 0) signals.push(`真题待复盘 ${review.mistakeReview.due} 道`);
 
   return {
     today,

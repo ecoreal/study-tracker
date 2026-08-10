@@ -32,6 +32,7 @@ import {
 } from '../ielts.js';
 import {
   renderReviewPanel,
+  renderMistakeReviewPanel,
   renderVocabularyPanel,
   renderReviewPreferences,
 } from './review-view.js';
@@ -46,6 +47,7 @@ export function renderIelts(root, ctx) {
 
   const tabsWrap = el('div', { className: 'ielts-tabs', role: 'tablist' }, [
     tabBtn('review', '今日复习'),
+    tabBtn('mistake-review', '真题复盘'),
     tabBtn('vocabulary', '词库'),
     tabBtn('form', '录入'),
     tabBtn('analysis', '学习分析'),
@@ -82,6 +84,12 @@ export function renderIelts(root, ctx) {
     if (activeTab === 'review') renderReviewPanel(bodyWrap, {
       suppressNextStoreRender: () => ctx.suppressNextStoreRender(),
       openVocabulary: () => setTab('vocabulary'),
+      openMistakeReview: () => setTab('mistake-review'),
+      refreshView: () => paintBody(),
+    });
+    else if (activeTab === 'mistake-review') renderMistakeReviewPanel(bodyWrap, {
+      suppressNextStoreRender: () => ctx.suppressNextStoreRender(),
+      openMistakes: () => setTab('mistakes'),
       refreshView: () => paintBody(),
     });
     else if (activeTab === 'vocabulary') {
@@ -97,15 +105,15 @@ export function renderIelts(root, ctx) {
   viewRoot.append(
     el('div', { className: 'view-header' }, [
       el('h2', { text: '雅思学习' }),
-      el('p', { text: '按遗忘曲线复习单词和错题，跟踪真题表现。' }),
+      el('p', { text: '词汇按遗忘曲线复习，真题错题按复盘结果安排再做。' }),
     ]),
     tabsWrap,
     bodyWrap,
   );
   root.append(viewRoot);
   // 允许通过 URL hash 直达 sub-tab：#ielts=analysis / mistakes / records
-  const hashSub = (location.hash || '').match(/ielts=([a-z]+)/);
-  if (hashSub && ['review', 'vocabulary', 'form', 'analysis', 'mistakes', 'records', 'bandtable'].includes(hashSub[1])) {
+  const hashSub = (location.hash || '').match(/ielts=([a-z-]+)/);
+  if (hashSub && ['review', 'mistake-review', 'vocabulary', 'form', 'analysis', 'mistakes', 'records', 'bandtable'].includes(hashSub[1])) {
     activeTab = hashSub[1];
     tabsWrap.querySelectorAll('button').forEach((b) => {
       b.classList.toggle('active', b.dataset.tab === activeTab);

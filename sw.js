@@ -8,7 +8,7 @@
 // Relative paths so precaching works on GitHub Pages project sites
 // served under a subdirectory (e.g. /study-tracker/) — they resolve
 // against the SW script's own location, not the origin root.
-const CACHE = 'study-tracker-v8';
+const CACHE = 'study-tracker-v9';
 const ASSETS = [
   './',
   './index.html',

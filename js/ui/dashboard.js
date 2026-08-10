@@ -185,33 +185,49 @@ export function renderDashboard(root, ctx) {
 }
 
 function reviewDashboardCard(review, ctx) {
-  const hasContent = review.words + review.mistakes > 0;
-  return el('section', { className: 'card dashboard-review-card' }, [
-    el('div', { className: 'dashboard-review-main' }, [
-      el('div', {}, [
-        el('div', { className: 'card-header' }, [
-          el('h3', { text: '今日记忆复习' }),
-          hasContent ? el('span', { className: 'badge', text: 'FSRS' }) : null,
-        ]),
-        el('p', {
-          className: 'muted',
-          text: hasContent
-            ? review.todayDue
-              ? `${review.scheduledDue} 项到期 · ${review.newAvailable} 项新内容`
-              : `今天已完成 ${review.reviewedToday} 项，暂无到期内容`
-            : '导入词表或 iDictation 错题后开始安排',
-        }),
-      ]),
-      hasContent
-        ? el('strong', { className: 'dashboard-review-count', text: String(review.todayDue) })
-        : null,
+  const mistake = review.mistakeReview || { total: 0, due: 0, reviewedToday: 0 };
+  const hasVocabulary = review.words > 0;
+  const hasMistakes = mistake.total > 0;
+  const hasContent = hasVocabulary || hasMistakes;
+  const track = (title, count, description, actionLabel, subview, available) => el('div', { className: 'dashboard-review-track' }, [
+    el('div', {}, [
+      el('strong', { text: title }),
+      el('p', { className: 'muted', text: description }),
     ]),
+    el('strong', { className: 'dashboard-review-count', text: String(count) }),
     el('button', {
       type: 'button',
-      className: `btn ${review.todayDue ? 'btn-primary' : 'btn-ghost'}`,
-      text: hasContent ? (review.todayDue ? '开始复习' : '查看进度') : '导入词表',
-      onClick: () => ctx.navigate('ielts', hasContent ? 'review' : 'vocabulary'),
+      className: `btn btn-sm ${available ? 'btn-primary' : 'btn-ghost'}`,
+      text: actionLabel,
+      onClick: () => ctx.navigate('ielts', subview),
     }),
+  ]);
+  return el('section', { className: 'card dashboard-review-card' }, [
+    el('div', { className: 'dashboard-review-main' }, [
+      el('div', { className: 'card-header' }, [
+        el('h3', { text: '今日学习' }),
+        hasContent ? el('span', { className: 'badge', text: '分流学习' }) : null,
+      ]),
+      el('p', { className: 'muted', text: hasContent ? '词汇与真题错题使用各自的学习流程。' : '导入词汇或真题错题后开始安排' }),
+      el('div', { className: 'dashboard-review-tracks' }, [
+        track(
+          '词汇复习',
+          review.todayDue,
+          hasVocabulary ? `${review.scheduledDue} 个到期 · ${review.newAvailable} 个新词` : '导入阅读 538 词或听力错词',
+          review.todayDue ? '开始词汇' : '打开词库',
+          review.todayDue ? 'review' : 'vocabulary',
+          Boolean(review.todayDue),
+        ),
+        track(
+          '真题复盘',
+          mistake.due,
+          hasMistakes ? `${mistake.unreviewed} 道未复盘 · ${mistake.practiceDue} 道需再做` : '导入阅读错题本开始',
+          mistake.due ? '开始复盘' : '打开复盘',
+          'mistake-review',
+          Boolean(mistake.due),
+        ),
+      ]),
+    ]),
   ]);
 }
 
@@ -241,6 +257,8 @@ function smartCoachCard(plan, ctx) {
         pomodoro.start();
       } else if (plan.action === 'review') {
         ctx.navigate('ielts', 'review');
+      } else if (plan.action === 'mistake-review') {
+        ctx.navigate('ielts', 'mistake-review');
       } else if (plan.action === 'stats') {
         ctx.navigate('stats');
       } else {

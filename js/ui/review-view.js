@@ -6,12 +6,15 @@ import {
   updateVocabulary,
   removeVocabulary,
   importIeltsMistakes,
+  markMistakeReview,
   applyReviewResult,
   updateSettings,
 } from '../store.js';
 import {
   buildReviewQueue,
   getReviewSummary,
+  buildMistakeReviewQueue,
+  getMistakeReviewSummary,
   previewRatings,
   rateCard,
   formatInterval,
@@ -32,7 +35,6 @@ export function renderReviewPanel(container, ctx) {
   const queueCounts = {
     all: buildReviewQueue(getData(), { kind: 'all' }).length,
     word: buildReviewQueue(getData(), { kind: 'word' }).length,
-    mistake: buildReviewQueue(getData(), { kind: 'mistake' }).length,
   };
   const mount = el('div');
   container.append(mount);
@@ -41,18 +43,24 @@ export function renderReviewPanel(container, ctx) {
     mount.replaceChildren(
       el('section', { className: 'review-hero' }, [
         el('div', { className: 'review-hero-copy' }, [
-          el('span', { className: 'eyebrow', text: summary.todayDue ? '今日计划' : '今日已清空' }),
+          el('span', { className: 'eyebrow', text: summary.todayDue ? '词汇复习' : '词汇已清空' }),
           el('strong', { className: 'review-due-number', text: String(summary.todayDue) }),
-          el('span', { className: 'review-due-label', text: '项待学习' }),
+          el('span', { className: 'review-due-label', text: '个词待学习' }),
           el('p', {
             className: 'muted',
             text: summary.scheduledDue
-              ? `${summary.scheduledDue} 项到期 · ${summary.newAvailable} 项新内容`
-              : `${summary.newAvailable} 项新内容 · 每日循序加入`,
+              ? `${summary.scheduledDue} 个到期 · ${summary.newAvailable} 个新词`
+              : `${summary.newAvailable} 个新词 · 按你的节奏全部可学`,
           }),
         ]),
         el('div', { className: 'review-hero-actions' }, [
           startButton('all', '开始今日复习', 'btn-primary'),
+          el('button', {
+            type: 'button',
+            className: 'btn btn-ghost',
+            text: '真题复盘',
+            onClick: ctx.openMistakeReview,
+          }),
           el('button', {
             type: 'button',
             className: 'btn btn-ghost',
@@ -64,17 +72,16 @@ export function renderReviewPanel(container, ctx) {
       el('div', { className: 'review-stats' }, [
         stat('已复习', summary.reviewedToday, '今天'),
         stat('到期', summary.scheduledDue, '优先处理'),
-        stat('新内容', summary.newBacklog, '逐日加入'),
+        stat('新词', summary.newBacklog, '全部可学'),
         stat('长期记忆', summary.mature, '间隔 ≥ 21 天'),
       ]),
       el('section', { className: 'card review-choice' }, [
         el('div', { className: 'card-header' }, [
-          el('h3', { text: '选择本轮内容' }),
-          el('span', { className: 'badge', text: 'FSRS · 90% 保留率' }),
+          el('h3', { text: '词汇记忆' }),
+          el('span', { className: 'badge', text: 'FSRS · 词汇专用' }),
         ]),
-        el('div', { className: 'review-choice-grid' }, [
-          choice('word', '单词', queueCounts.word, `${summary.words} 个词`),
-          choice('mistake', '雅思错题', queueCounts.mistake, `${summary.mistakes} 道题`),
+        el('div', { className: 'review-choice-grid single' }, [
+          choice('word', '全部词汇', queueCounts.word, `${summary.words} 个词 · 阅读 538 + 听力错词`),
         ]),
       ]),
     );
@@ -343,6 +350,177 @@ export function renderReviewPanel(container, ctx) {
   paintOverview();
 }
 
+/**
+ * Real-test mistake review is deliberately a manual, chronological workflow.
+ * It records whether the learner has understood the question and when it should
+ * be practised again, without creating an FSRS card.
+ */
+export function renderMistakeReviewPanel(container, ctx) {
+  const mount = el('div');
+  let subject = 'all';
+  container.append(mount);
+
+  function paintOverview() {
+    const summary = getMistakeReviewSummary(getData());
+    const queue = buildMistakeReviewQueue(getData(), { subject });
+    mount.replaceChildren(
+      el('section', { className: 'review-hero' }, [
+        el('div', { className: 'review-hero-copy' }, [
+          el('span', { className: 'eyebrow', text: summary.due ? '真题复盘' : '复盘已清空' }),
+          el('strong', { className: 'review-due-number', text: String(summary.due) }),
+          el('span', { className: 'review-due-label', text: '道题待复盘' }),
+          el('p', { className: 'muted', text: `${summary.unreviewed} 道未复盘 · ${summary.practiceDue} 道需要再做` }),
+        ]),
+        el('div', { className: 'review-hero-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: queue.length ? `开始复盘 · ${queue.length}` : '暂无待复盘',
+            disabled: !queue.length,
+            onClick: () => startSession(queue),
+          }),
+          el('button', { type: 'button', className: 'btn btn-ghost', text: '管理错题本', onClick: ctx.openMistakes }),
+        ]),
+      ]),
+      el('div', { className: 'review-stats' }, [
+        stat('全部错题', summary.total, '阅读 / 听力真题'),
+        stat('未复盘', summary.unreviewed, '先理解错因'),
+        stat('需要再做', summary.practiceDue, '到期后出现'),
+        stat('已掌握', summary.reviewed, '手动标记'),
+      ]),
+      el('section', { className: 'card review-choice' }, [
+        el('div', { className: 'card-header' }, [
+          el('h3', { text: '选择真题范围' }),
+          el('span', { className: 'badge', text: '不使用 FSRS' }),
+        ]),
+        el('div', { className: 'btn-row' }, [
+          subjectButton('all', `全部 · ${summary.due}`),
+          subjectButton('reading', `阅读 · ${buildMistakeReviewQueue(getData(), { subject: 'reading' }).length}`),
+          subjectButton('listening', `听力 · ${buildMistakeReviewQueue(getData(), { subject: 'listening' }).length}`),
+        ]),
+        el('p', { className: 'muted', text: '复盘后手动选择“已掌握”或“需要再做”，系统只记录真题复盘状态。' }),
+      ]),
+    );
+  }
+
+  function stat(label, value, sub) {
+    return el('div', { className: 'review-stat' }, [
+      el('span', { className: 'review-stat-label', text: label }),
+      el('strong', { text: String(value) }),
+      el('span', { className: 'review-stat-sub', text: sub }),
+    ]);
+  }
+
+  function subjectButton(value, label) {
+    return el('button', {
+      type: 'button',
+      className: `btn btn-sm ${subject === value ? 'btn-primary' : 'btn-ghost'}`,
+      text: label,
+      onClick: () => { subject = value; paintOverview(); },
+    });
+  }
+
+  function startSession(queue) {
+    if (!queue.length) {
+      toast('这一组暂时没有待复盘题目', 'info');
+      return;
+    }
+    paintSession({ queue, index: 0, results: { reviewed: 0, practice: 0 } });
+  }
+
+  function paintSession(session) {
+    if (session.index >= session.queue.length) {
+      const done = session.results.reviewed + session.results.practice;
+      mount.replaceChildren(el('section', { className: 'review-complete' }, [
+        el('span', { className: 'complete-mark', text: '✓' }),
+        el('h3', { text: '真题复盘完成' }),
+        el('p', { className: 'muted', text: `完成 ${done} 道 · 已掌握 ${session.results.reviewed} 道 · 需要再做 ${session.results.practice} 道` }),
+        el('button', { type: 'button', className: 'btn btn-primary', text: '返回真题复盘', onClick: paintOverview }),
+      ]));
+      return;
+    }
+    const item = session.queue[session.index];
+    const body = el('div', { className: 'study-card-body' });
+    const actions = el('div', { className: 'review-rating-area', hidden: true });
+    let revealed = false;
+    const progress = Math.round((session.index / session.queue.length) * 100);
+    mount.replaceChildren(el('section', { className: 'review-session' }, [
+      el('div', { className: 'review-session-head' }, [
+        el('button', { type: 'button', className: 'btn btn-ghost btn-sm', text: '退出', onClick: paintOverview }),
+        el('div', { className: 'review-session-progress' }, [
+          el('span', { text: `${session.index + 1} / ${session.queue.length}` }),
+          el('div', { className: 'progress', role: 'progressbar', 'aria-valuenow': progress }, [
+            el('div', { className: 'progress-fill', style: { width: `${progress}%` } }),
+          ]),
+        ]),
+        el('span', { className: 'badge', text: item.subject === 'reading' ? '阅读真题' : '听力真题' }),
+      ]),
+      el('div', { className: 'study-card' }, [body, actions]),
+    ]));
+
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      body.querySelector('.reveal-answer')?.remove();
+      const mistake = item.mistake;
+      body.append(el('div', { className: 'study-answer' }, [
+        mistake.correctAnswer ? el('div', { className: 'answer-line correct', text: `正确答案：${mistake.correctAnswer}` }) : null,
+        mistake.orig ? el('blockquote', {}, [el('span', { text: mistake.orig })]) : null,
+        mistake.sub ? el('p', { text: `同义替换：${mistake.sub}` }) : null,
+        mistake.reason ? el('p', { text: `错因：${mistake.reason}` }) : null,
+        mistake.note ? el('p', { className: 'muted', text: mistake.note }) : null,
+      ]));
+      actions.hidden = false;
+      actions.replaceChildren(
+        el('p', { className: 'rating-question', text: '复盘结果' }),
+        el('div', { className: 'btn-row' }, [
+          actionButton('reviewed', '已掌握', 'btn-primary'),
+          actionButton('practice', '需要再做', 'btn-ghost'),
+        ]),
+      );
+    };
+    body.append(
+      el('div', { className: 'study-card-kicker' }, [
+        el('span', { text: `${item.entry.paper || '未命名'} · ${item.entry.date || ''}` }),
+        item.mistake.part ? el('span', { className: 'badge', text: `P${item.mistake.part}` }) : null,
+      ]),
+      el('div', { className: 'mistake-prompt' }, [
+        item.mistake.externalRef ? el('strong', { text: item.mistake.externalRef }) : null,
+        el('p', { text: item.mistake.question || item.mistake.ans || '回忆这道错题的正确答案' }),
+        item.mistake.userAnswer ? el('div', { className: 'answer-line wrong', text: `上次作答：${item.mistake.userAnswer}` }) : null,
+      ]),
+      el('button', { type: 'button', className: 'btn btn-primary reveal-answer', text: '显示答案并复盘', onClick: reveal }),
+    );
+
+    function actionButton(status, label, style) {
+      return el('button', {
+        type: 'button',
+        className: `btn ${style}`,
+        text: label,
+        onClick: () => {
+          ctx.suppressNextStoreRender();
+          markMistakeReview({
+            id: item.id,
+            status,
+            nextPracticeDate: status === 'practice' ? addDaysIso(new Date(), 1) : null,
+          });
+          session.results[status] += 1;
+          session.index += 1;
+          paintSession(session);
+        },
+      });
+    }
+  }
+
+  function addDaysIso(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next.toISOString();
+  }
+
+  paintOverview();
+}
+
 export function renderVocabularyPanel(container, ctx) {
   const fileInput = el('input', {
     type: 'file',
@@ -386,8 +564,8 @@ export function renderVocabularyPanel(container, ctx) {
   container.append(
     el('section', { className: 'import-toolbar' }, [
       el('div', {}, [
-        el('h3', { text: '词库与外部错题' }),
-        el('p', { className: 'muted', text: `${data.vocabulary.length} 个单词 · JSON / iDictation Excel` }),
+        el('h3', { text: '词汇库' }),
+        el('p', { className: 'muted', text: `${data.vocabulary.length} 个词 · 阅读 538 词 + 爱听写听力错词` }),
       ]),
       el('div', { className: 'btn-row' }, [
         el('a', {
@@ -434,11 +612,11 @@ export function renderVocabularyPanel(container, ctx) {
     const ok = await modal({
       title: '确认导入',
       size: 'md',
-      confirmText: '导入并安排复习',
+      confirmText: '导入数据',
       body: el('div', { className: 'import-preview' }, [
         el('div', { className: 'import-preview-counts' }, [
-          el('div', {}, [el('strong', { text: String(words.length) }), el('span', { text: '单词' })]),
-          el('div', {}, [el('strong', { text: String(mistakes.length) }), el('span', { text: '雅思错题' })]),
+          el('div', {}, [el('strong', { text: String(words.length) }), el('span', { text: '词汇' })]),
+          el('div', {}, [el('strong', { text: String(mistakes.length) }), el('span', { text: '真题错题' })]),
         ]),
         el('p', { className: 'muted', text: imported.map((item) => item.name).join('、') }),
       ]),
@@ -446,7 +624,7 @@ export function renderVocabularyPanel(container, ctx) {
     if (!ok) return;
     const wordResult = upsertVocabulary(words);
     const mistakeResult = importIeltsMistakes(mistakes);
-    toast(`已新增 ${wordResult.added} 个词、${mistakeResult.added} 道错题`, 'success');
+    toast(`已新增 ${wordResult.added} 个词、${mistakeResult.added} 道真题错题`, 'success');
   }
 
   function filteredWords() {
@@ -568,18 +746,10 @@ export function renderReviewPreferences(container, ctx) {
     el('option', { value: 'spelling', text: '根据释义拼写' }),
   ]);
   mode.value = settings.wordMode || 'recognition';
-  const newLimit = el('input', {
-    type: 'number',
-    min: '0',
-    max: '100',
-    value: String(settings.dailyNewLimit ?? 20),
-  });
   container.append(el('section', { className: 'card form-grid review-settings' }, [
     el('h3', { text: '复习偏好' }),
-    el('div', { className: 'form-row inline' }, [
-      el('div', { className: 'form-row' }, [el('label', { text: '单词模式' }), mode]),
-      el('div', { className: 'form-row' }, [el('label', { text: '每日新内容' }), newLimit]),
-    ]),
+    el('div', { className: 'form-row' }, [el('label', { text: '单词模式' }), mode]),
+    el('p', { className: 'muted', text: '词汇复习不设置每日上限，到期词和新词都可以按需学习；真题错题请在“真题复盘”中单独处理。' }),
     el('div', { className: 'btn-row' }, [
       el('button', {
         type: 'button',
@@ -590,7 +760,6 @@ export function renderReviewPreferences(container, ctx) {
           updateSettings({
             review: {
               wordMode: mode.value,
-              dailyNewLimit: Math.min(100, Math.max(0, Number(newLimit.value) || 0)),
             },
           });
           toast('复习偏好已保存', 'success');

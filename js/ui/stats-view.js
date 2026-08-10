@@ -170,8 +170,14 @@ function coachInsightSection(plan) {
     insights.push({
       label: '记忆负荷',
       text: plan.review.todayDue
-        ? `今天有 ${plan.review.todayDue} 项可学习，其中 ${plan.review.scheduledDue} 项已经到期。`
-        : `今天的复习已完成，当前有 ${plan.review.mature} 项进入长期记忆。`,
+        ? `今天有 ${plan.review.todayDue} 个词汇可学习，其中 ${plan.review.scheduledDue} 个已经到期。`
+        : `今天的词汇复习已完成，当前有 ${plan.review.mature} 个词进入长期记忆。`,
+    });
+  }
+  if (plan.review?.mistakeReview?.due) {
+    insights.push({
+      label: '真题复盘',
+      text: `还有 ${plan.review.mistakeReview.due} 道真题待复盘，和词汇复习分开处理更容易看清错因。`,
     });
   }
   if (!insights.length) {

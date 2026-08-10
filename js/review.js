@@ -80,6 +80,7 @@ export async function rateCard(card, rating, now = new Date()) {
   };
 }
 
+/** Vocabulary-only FSRS items. IELTS mistakes use the separate manual flow below. */
 export function collectReviewItems(data) {
   const items = [];
   for (const word of data.vocabulary || []) {
@@ -91,44 +92,20 @@ export function collectReviewItems(data) {
       word,
     });
   }
-  for (const entry of data.ielts || []) {
-    for (const subject of ['listening', 'reading']) {
-      const section = entry[subject];
-      if (!section || typeof section !== 'object' || !Array.isArray(section.mistakes)) continue;
-      for (const mistake of section.mistakes) {
-        if (!mistake?.id) continue;
-        items.push({
-          key: `mistake:${mistake.id}`,
-          kind: 'mistake',
-          id: mistake.id,
-          card: mistake.review || null,
-          mistake,
-          entry,
-          subject,
-        });
-      }
-    }
-  }
   return items;
 }
 
 export function buildReviewQueue(data, { kind = 'all', now = new Date() } = {}) {
-  const allItems = collectReviewItems(data).filter((item) => kind === 'all' || item.kind === kind);
+  // `kind` is kept for callers from older versions; this queue is intentionally words only.
+  const allItems = collectReviewItems(data).filter((item) => kind === 'all' || kind === 'word');
   const nowMs = now.getTime();
   const scheduled = allItems
     .filter((item) => item.card && dueTime(item.card) <= nowMs)
     .sort((a, b) => dueTime(a.card) - dueTime(b.card));
-  const fresh = interleaveNewItems(allItems.filter((item) => !item.card));
-  const newLimit = Math.min(100, Math.max(0, Number(data.settings?.review?.dailyNewLimit) || 20));
-  const start = startOfDay(now).getTime();
-  const newReviewedToday = new Set(
-    (data.reviewLogs || [])
-      .filter((log) => log.wasNew)
-      .filter((log) => (Date.parse(log.reviewedAt) || 0) >= start)
-      .map((log) => `${log.kind}:${log.itemId}`),
-  ).size;
-  const newAllowance = Math.max(0, newLimit - newReviewedToday);
-  return [...scheduled, ...fresh.slice(0, newAllowance)];
+  const fresh = allItems
+    .filter((item) => !item.card)
+    .sort((a, b) => (Number(b.word.errorCount) || 0) - (Number(a.word.errorCount) || 0));
+  return [...scheduled, ...fresh];
 }
 
 export function getReviewSummary(data, now = new Date()) {
@@ -138,13 +115,10 @@ export function getReviewSummary(data, now = new Date()) {
   const fresh = items.filter((item) => !item.card);
   const start = startOfDay(now).getTime();
   const logsToday = (data.reviewLogs || []).filter(
-    (log) => (Date.parse(log.reviewedAt) || 0) >= start,
+    (log) => log.kind === 'word' && (Date.parse(log.reviewedAt) || 0) >= start,
   );
-  const newReviewedToday = new Set(
-    logsToday.filter((log) => log.wasNew).map((log) => `${log.kind}:${log.itemId}`),
-  ).size;
-  const newLimit = Math.min(100, Math.max(0, Number(data.settings?.review?.dailyNewLimit) || 20));
-  const newAvailable = Math.min(fresh.length, Math.max(0, newLimit - newReviewedToday));
+  const newAvailable = fresh.length;
+  const mistakeReview = getMistakeReviewSummary(data, now);
   return {
     total: items.length,
     words: items.filter((item) => item.kind === 'word').length,
@@ -155,6 +129,71 @@ export function getReviewSummary(data, now = new Date()) {
     todayDue: scheduledDue.length + newAvailable,
     reviewedToday: logsToday.length,
     mature: items.filter((item) => item.card?.state === 2 && Number(item.card?.scheduled_days) >= 21).length,
+    mistakeReview,
+  };
+}
+
+export function collectMistakeReviewItems(data) {
+  const items = [];
+  for (const entry of data.ielts || []) {
+    for (const subject of ['listening', 'reading']) {
+      const section = entry[subject];
+      if (!section || typeof section !== 'object' || !Array.isArray(section.mistakes)) continue;
+      for (const mistake of section.mistakes) {
+        if (!mistake?.id) continue;
+        items.push({
+          key: `mistake:${mistake.id}`,
+          kind: 'mistake',
+          id: mistake.id,
+          review: mistake.mistakeReview || null,
+          mistake,
+          entry,
+          subject,
+        });
+      }
+    }
+  }
+  return items;
+}
+
+/** Chronological/manual queue for real-test mistakes, independent from FSRS vocabulary cards. */
+export function buildMistakeReviewQueue(data, { subject = 'all', now = new Date() } = {}) {
+  const nowMs = now.getTime();
+  return collectMistakeReviewItems(data)
+    .filter((item) => subject === 'all' || item.subject === subject)
+    .filter((item) => {
+      const status = item.review?.status || 'unreviewed';
+      if (status === 'unreviewed') return true;
+      return status === 'practice' && (!item.review?.nextPracticeDate || Date.parse(item.review.nextPracticeDate) <= nowMs);
+    })
+    .sort((a, b) => {
+      const statusA = a.review?.status || 'unreviewed';
+      const statusB = b.review?.status || 'unreviewed';
+      if (statusA !== statusB) return statusA === 'unreviewed' ? -1 : 1;
+      const dateA = Date.parse(a.mistake.createdAt || a.entry.date || '') || 0;
+      const dateB = Date.parse(b.mistake.createdAt || b.entry.date || '') || 0;
+      return dateA - dateB;
+    });
+}
+
+export function getMistakeReviewSummary(data, now = new Date()) {
+  const items = collectMistakeReviewItems(data);
+  const nowMs = now.getTime();
+  const unreviewed = items.filter((item) => !item.review || item.review.status === 'unreviewed').length;
+  const practiceDue = items.filter((item) => item.review?.status === 'practice'
+    && (!item.review.nextPracticeDate || Date.parse(item.review.nextPracticeDate) <= nowMs)).length;
+  const reviewed = items.filter((item) => item.review?.status === 'reviewed').length;
+  const start = startOfDay(now).getTime();
+  const reviewedToday = (data.reviewLogs || []).filter((log) => log.kind === 'mistake'
+    && log.framework === 'manual'
+    && (Date.parse(log.reviewedAt) || 0) >= start).length;
+  return {
+    total: items.length,
+    unreviewed,
+    practiceDue,
+    reviewed,
+    due: unreviewed + practiceDue,
+    reviewedToday,
   };
 }
 
@@ -196,19 +235,4 @@ function startOfDay(date) {
   const out = new Date(date);
   out.setHours(0, 0, 0, 0);
   return out;
-}
-
-function interleaveNewItems(items) {
-  const words = items
-    .filter((item) => item.kind === 'word')
-    .sort((a, b) => (Number(b.word.errorCount) || 0) - (Number(a.word.errorCount) || 0));
-  const mistakes = items
-    .filter((item) => item.kind === 'mistake')
-    .sort((a, b) => String(b.mistake.createdAt || '').localeCompare(String(a.mistake.createdAt || '')));
-  const mixed = [];
-  while (words.length || mistakes.length) {
-    for (let i = 0; i < 3 && words.length; i += 1) mixed.push(words.shift());
-    if (mistakes.length) mixed.push(mistakes.shift());
-  }
-  return mixed;
 }

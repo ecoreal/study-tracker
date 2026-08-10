@@ -1888,9 +1888,7 @@ textarea {
 
 .dashboard-review-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 16px;
+  gap: 8px;
 }
 
 .dashboard-review-main .card-header,
@@ -1901,6 +1899,42 @@ textarea {
 .dashboard-review-count {
   font-size: 2rem;
   font-variant-numeric: tabular-nums;
+}
+
+.dashboard-review-tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dashboard-review-track {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-review-track strong,
+.dashboard-review-track p {
+  margin: 0;
+}
+
+.dashboard-review-track > div {
+  min-width: 0;
+}
+
+.dashboard-review-track > div strong {
+  display: block;
+}
+
+.dashboard-review-track p {
+  margin-top: 3px;
+  font-size: 0.75rem;
 }
 
 .review-hero-copy {
@@ -1974,6 +2008,10 @@ textarea {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.review-choice-grid.single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .review-choice-button {
@@ -2405,13 +2443,17 @@ textarea {
     width: 100%;
   }
 
+  .dashboard-review-tracks {
+    grid-template-columns: 1fr;
+  }
+
   .review-hero {
     grid-template-columns: 1fr;
     gap: 16px;
   }
 
   .review-hero-actions {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     min-width: 0;
   }
 
