@@ -1,8 +1,9 @@
-import { el, progressBar } from './components.js';
-import { getData, todayStr, toggleTask, addTask } from '../store.js';
+import { el, progressBar, toast } from './components.js';
+import { getData, todayStr, toggleTask, addTask, rolloverOpenTasksToToday } from '../store.js';
 import { streakDays, todayFocusStats, todayTasksStats, weekFocusMinutes } from '../stats.js';
 import { formatBand, bandOf } from '../ielts.js';
 import * as pomodoro from '../pomodoro.js';
+import { buildCoachPlan, formatMinutes } from '../coach.js';
 
 /**
  * @param {HTMLElement} root
@@ -24,6 +25,7 @@ export function renderDashboard(root, ctx) {
   const minGoal = Math.max(1, goals.focusMinutes || 120);
   const countGoal = Math.max(1, goals.focusCount || 4);
   const pState = pomodoro.getState();
+  const coach = buildCoachPlan(data);
 
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()];
   const greet = greeting();
@@ -68,6 +70,8 @@ export function renderDashboard(root, ctx) {
       /* 今日概览横幅 */
       summaryBanner(data, today),
 
+      smartCoachCard(coach, ctx),
+
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
           el('h3', { text: '今日目标' }),
@@ -101,7 +105,7 @@ export function renderDashboard(root, ctx) {
               onClick: () => ctx.navigate('tasks'),
             }),
           ]),
-          taskQuickList(todayTasks, ctx),
+          taskQuickList(todayTasks, ctx, coach),
           quickAddTask(today),
           openTasks.length
             ? el('p', {
@@ -176,6 +180,73 @@ export function renderDashboard(root, ctx) {
   root._cleanup = () => live.unsub();
 }
 
+function smartCoachCard(plan, ctx) {
+  const action = el('button', {
+    type: 'button',
+    className: `btn btn-sm ${plan.action === 'rollover' ? 'btn-ghost' : 'btn-primary'}`,
+    text: plan.actionLabel,
+    onClick: () => {
+      if (plan.action === 'rollover') {
+        const count = rolloverOpenTasksToToday();
+        toast(count ? `已整理 ${count} 项任务到今天` : '没有需要整理的任务', count ? 'success' : 'info');
+        ctx.refresh();
+        return;
+      }
+      if (plan.action === 'start' && plan.actionTask) {
+        pomodoro.setTaskId(plan.actionTask.id);
+        pomodoro.setMode('focus');
+        pomodoro.setCustomDuration(plan.suggestedRound);
+      } else if (plan.action === 'timer') {
+        pomodoro.setTaskId(null);
+        pomodoro.setMode('focus');
+        pomodoro.setCustomDuration(plan.suggestedRound);
+      }
+      if (plan.action === 'start' || plan.action === 'timer') {
+        ctx.navigate('timer');
+        pomodoro.start();
+      } else if (plan.action === 'stats') {
+        ctx.navigate('stats');
+      } else {
+        ctx.navigate('tasks');
+      }
+    },
+  });
+
+  return el('section', { className: 'card coach-card' }, [
+    el('div', { className: 'card-header coach-header' }, [
+      el('div', { className: 'coach-title-wrap' }, [
+        el('span', { className: 'coach-mark', text: '✦', 'aria-hidden': 'true' }),
+        el('div', {}, [
+          el('h3', { text: '智能学习建议' }),
+          el('p', { className: 'coach-caption', text: '根据你的近期记录，给出下一步' }),
+        ]),
+      ]),
+      el('span', {
+        className: 'badge coach-badge',
+        text: plan.focusToday
+          ? `今日 ${formatMinutes(plan.focusToday)}`
+          : plan.overdueTasks.length
+            ? '待整理'
+            : plan.nextTask
+              ? `建议 ${plan.suggestedRound} 分钟`
+              : '准备开始',
+      }),
+    ]),
+    el('div', { className: 'coach-main' }, [
+      el('div', { className: 'coach-copy' }, [
+        el('strong', { className: 'coach-headline', text: plan.headline }),
+        el('p', { className: 'coach-detail', text: plan.detail }),
+      ]),
+      action,
+    ]),
+    plan.signals.length
+      ? el('div', { className: 'coach-signals' }, plan.signals.slice(0, 3).map((signal) =>
+        el('span', { className: 'coach-signal', text: signal }),
+      ))
+      : null,
+  ]);
+}
+
 function createLiveTimer(ctx) {
   const slot = el('div', { className: 'live-timer-slot' });
   const unsub = pomodoro.subscribePomodoro((st) => {
@@ -237,14 +308,22 @@ function stat(label, value, hint) {
   ]);
 }
 
-function taskQuickList(tasks, ctx) {
+function taskQuickList(tasks, ctx, coach) {
   if (!tasks.length) {
     return el('div', { className: 'empty soft', text: '今天还没有任务' });
   }
+  const sorted = [
+    ...tasks.filter((task) => !task.done).sort((a, b) => {
+      const ai = coach.rankedTasks.findIndex((item) => item.id === a.id);
+      const bi = coach.rankedTasks.findIndex((item) => item.id === b.id);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    }),
+    ...tasks.filter((task) => task.done),
+  ];
   return el(
     'div',
     { className: 'list' },
-    tasks.slice(0, 8).map((t) =>
+    sorted.slice(0, 8).map((t) =>
       el('div', { className: `list-item compact${t.done ? ' done' : ''}` }, [
         el('input', {
           type: 'checkbox',

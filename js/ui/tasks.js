@@ -9,6 +9,7 @@ import {
   todayStr,
 } from '../store.js';
 import * as pomodoro from '../pomodoro.js';
+import { buildCoachPlan, scoreTask, formatMinutes } from '../coach.js';
 
 let selectedDate = todayStr();
 let refocusQuickAdd = false;
@@ -27,6 +28,7 @@ export function renderTasks(root, ctx) {
     onChange: (e) => setDate(e.target.value || todayStr()),
   });
   const listRoot = el('div');
+  const smartRoot = el('div');
   const dateBadge = el('span', { className: 'badge muted', text: dateLabel(filterDate) });
   const summary = el('p', { className: 'help task-summary', text: '' });
   const textInput = el('input', {
@@ -97,6 +99,7 @@ export function renderTasks(root, ctx) {
 
   function paintList() {
     listRoot.replaceChildren();
+    smartRoot.replaceChildren();
     const items = getData().tasks.filter((task) => task.date === filterDate);
     const done = items.filter((task) => task.done).length;
     summary.textContent = items.length
@@ -108,7 +111,37 @@ export function renderTasks(root, ctx) {
       return;
     }
 
-    const sorted = [...items.filter((task) => !task.done), ...items.filter((task) => task.done)];
+    const plan = buildCoachPlan(getData());
+    const openItems = items.filter((task) => !task.done);
+    const sortedOpen = filterDate === todayStr()
+      ? [...openItems].sort((a, b) => scoreTask(b, filterDate, plan.taskMinutes) - scoreTask(a, filterDate, plan.taskMinutes))
+      : openItems;
+    const sorted = [...sortedOpen, ...items.filter((task) => task.done)];
+
+    if (filterDate === todayStr() && plan.nextTask && openItems.some((task) => task.id === plan.nextTask.id)) {
+      const coachStart = el('button', {
+        type: 'button',
+        className: 'btn btn-sm btn-primary',
+        text: `开始 ${plan.suggestedRound} 分钟`,
+        onClick: () => {
+          pomodoro.setTaskId(plan.nextTask.id);
+          pomodoro.setMode('focus');
+          pomodoro.setCustomDuration(plan.suggestedRound);
+          ctx.navigate('timer');
+          pomodoro.start();
+        },
+      });
+      smartRoot.append(el('div', { className: 'task-smart-hint' }, [
+        el('div', { className: 'task-smart-copy' }, [
+          el('span', { className: 'coach-mark', text: '✦', 'aria-hidden': 'true' }),
+          el('div', {}, [
+            el('strong', { text: `建议先做：${plan.nextTask.text}` }),
+            el('span', { text: `${formatMinutes(plan.suggestedRound)} · 根据优先级与专注记录排序` }),
+          ]),
+        ]),
+        coachStart,
+      ]));
+    }
     listRoot.append(el('div', { className: 'list' }, sorted.map((task) =>
       el('div', { className: `list-item task-item${task.done ? ' done' : ''}` }, [
         el('input', {
@@ -197,6 +230,7 @@ export function renderTasks(root, ctx) {
           },
         }),
       ]),
+      smartRoot,
       listRoot,
     ]),
   ]));

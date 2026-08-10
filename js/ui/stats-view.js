@@ -8,6 +8,7 @@ import {
   todayFocusStats,
 } from '../stats.js';
 import { formatBand } from '../ielts.js';
+import { buildCoachPlan, formatMinutes } from '../coach.js';
 
 /**
  * @param {HTMLElement} root
@@ -22,6 +23,7 @@ export function renderStats(root) {
   const maxMin = Math.max(1, ...week.map((d) => d.minutes));
   const weekTotal = week.reduce((a, d) => a + d.minutes, 0);
   const goals = data.settings.dailyGoals || { focusMinutes: 120, focusCount: 4 };
+  const coach = buildCoachPlan(data);
   // recent IELTS overall list
   const activeDays = heat.filter((c) => !c.future && c.level > 0).length;
   const recentIelts = [...data.ielts]
@@ -55,6 +57,8 @@ export function renderStats(root) {
           label: `番茄 ${today.count} / ${goals.focusCount || 4} 个`,
         }),
       ]),
+
+      coachInsightSection(coach),
 
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
@@ -134,6 +138,50 @@ export function renderStats(root) {
       ]),
     ]),
   );
+}
+
+function coachInsightSection(plan) {
+  const insights = [];
+  if (plan.recentAverage > 0) {
+    const ratio = plan.recentAverage / plan.goalMinutes;
+    const message = ratio < 0.6
+      ? `当前目标比近期活跃日均高出较多，先稳定完成 ${formatMinutes(Math.max(25, Math.round(plan.recentAverage / 25) * 25))} 更可持续。`
+      : ratio > 1.2
+        ? '近期学习量已稳定超过目标，可以保持节奏，不必急着继续加量。'
+        : '当前目标和近期学习节奏基本匹配，继续保持即可。';
+    insights.push({ label: '目标匹配', text: message });
+  }
+  if (plan.completionRate != null) {
+    const pct = Math.round(plan.completionRate * 100);
+    insights.push({
+      label: '任务负荷',
+      text: pct < 50
+        ? `近 14 日任务完成率 ${pct}%，建议减少每日任务数，并把大任务拆成 25 分钟动作。`
+        : `近 14 日任务完成率 ${pct}%，当前计划量处于可执行范围。`,
+    });
+  }
+  if (plan.weakestIelts) {
+    insights.push({
+      label: '雅思方向',
+      text: `最近记录中${plan.weakestIelts.label}为相对短板（${plan.weakestIelts.value} 分），下一次练习优先安排这一科。`,
+    });
+  }
+  if (!insights.length) {
+    insights.push({ label: '等待数据', text: '完成任务和专注记录后，这里会逐步形成适合你的学习节奏建议。' });
+  }
+
+  return el('section', { className: 'card coach-insights' }, [
+    el('div', { className: 'card-header' }, [
+      el('h3', { text: '智能复盘' }),
+      el('span', { className: 'badge coach-badge', text: '近 14 日' }),
+    ]),
+    el('div', { className: 'coach-insight-list' }, insights.map((insight) =>
+      el('div', { className: 'coach-insight-row' }, [
+        el('span', { className: 'coach-insight-label', text: insight.label }),
+        el('p', { text: insight.text }),
+      ]),
+    )),
+  ]);
 }
 
 function cardStat(label, value, hint) {

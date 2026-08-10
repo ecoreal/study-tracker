@@ -2144,6 +2144,133 @@ body[data-view="timer"] .mini-bar-root {
   flex: 0 0 auto;
 }
 
+/* Explainable local study coach */
+.coach-card {
+  border-color: color-mix(in srgb, var(--accent-var) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft-var) 24%, var(--bg-elevated));
+}
+
+.coach-header {
+  align-items: flex-start;
+}
+
+.coach-title-wrap,
+.task-smart-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.coach-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-var);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+[data-theme="dark"] .coach-mark {
+  color: #042f2e;
+}
+
+.coach-caption {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.coach-badge {
+  background: var(--bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--accent-var) 26%, var(--border));
+}
+
+.coach-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.coach-copy {
+  min-width: 0;
+}
+
+.coach-headline {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.coach-detail {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.coach-main > .btn {
+  flex: 0 0 auto;
+}
+
+.coach-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--accent-var) 18%, var(--border));
+}
+
+.coach-signal {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.coach-insight-list {
+  display: grid;
+}
+
+.coach-insight-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 16px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--border);
+}
+
+.coach-insight-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.coach-insight-row:last-child {
+  padding-bottom: 0;
+}
+
+.coach-insight-label {
+  color: var(--accent-var);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.coach-insight-row p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
 .task-board {
   display: grid;
   gap: 16px;
@@ -2174,6 +2301,45 @@ body[data-view="timer"] .mini-bar-root {
 
 .task-summary {
   margin: 0;
+}
+
+.task-smart-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-var) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-soft-var) 28%, var(--bg));
+}
+
+.task-smart-copy {
+  align-items: flex-start;
+}
+
+.task-smart-copy .coach-mark {
+  flex-basis: 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.task-smart-copy strong,
+.task-smart-copy span:not(.coach-mark) {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.task-smart-copy strong {
+  font-size: 0.88rem;
+}
+
+.task-smart-copy span:not(.coach-mark) {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 
 .task-item {
@@ -2347,6 +2513,23 @@ body[data-view="timer"] .mini-bar-root {
 
   .task-date-toolbar {
     grid-template-columns: 40px minmax(0, 1fr) auto 40px;
+  }
+
+  .coach-main,
+  .task-smart-hint {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .coach-main > .btn,
+  .task-smart-hint > .btn {
+    width: 100%;
+  }
+
+  .coach-insight-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 
   .task-quick-form {
