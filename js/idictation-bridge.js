@@ -1,8 +1,7 @@
 /*
- * Run this file from the logged-in www.idictation.cn page's DevTools console:
- *   fetch('https://ecoreal.github.io/study-tracker/js/idictation-bridge.js').then(r => r.text()).then(eval)
- * It uses iDictation's own origin and session cookie, then sends only reading
- * mistake records to the Study Tracker tab through postMessage.
+ * This file is loaded by the visual bookmarklet installed from Study Tracker.
+ * It runs on iDictation's own origin and session cookie, then sends only
+ * reading mistake records to the Study Tracker tab through postMessage.
  */
 (async () => {
   const targetOrigin = 'https://ecoreal.github.io';

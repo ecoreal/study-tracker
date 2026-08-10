@@ -2419,17 +2419,26 @@ textarea {
   margin: 0;
 }
 
-.integration-code {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.integration-install {
+  display: grid;
+  gap: 12px;
+}
+
+.integration-install p {
   margin: 0;
-  padding: 12px;
-  color: var(--text);
+}
+
+.integration-bookmark-row {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
   background: var(--bg-muted);
-  border: 1px solid var(--border);
+  border: 1px dashed var(--accent-var);
   border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  line-height: 1.5;
+}
+
+.integration-bookmark {
+  cursor: grab;
 }
 
 .import-preview,

@@ -416,9 +416,9 @@ export function renderMistakeReviewPanel(container, ctx) {
       el('section', { className: 'card form-grid review-integration' }, [
         el('div', { className: 'card-header' }, [
           el('h3', { text: '爱听写同步' }),
-          el('span', { className: 'badge', text: '需在爱听写页面触发' }),
+          el('span', { className: 'badge', text: '安装一次即可' }),
         ]),
-        el('p', { className: 'muted', text: '爱听写接口需要你的登录会话，GitHub Pages 无法代替你跨站读取。可先导出 Excel 用上面的入口导入，也可在爱听写页面运行同步助手。' }),
+        el('p', { className: 'muted', text: '把下面的同步按钮拖到浏览器书签栏。以后在爱听写阅读结果页点击它，就会自动同步到这里。' }),
         el('div', { className: 'btn-row' }, [
           el('a', {
             className: 'btn btn-ghost',
@@ -430,8 +430,8 @@ export function renderMistakeReviewPanel(container, ctx) {
           el('button', {
             type: 'button',
             className: 'btn btn-ghost',
-            text: '复制同步助手说明',
-            onClick: copyIntegrationGuide,
+            text: '获取同步按钮',
+            onClick: openIntegrationGuide,
           }),
         ]),
       ]),
@@ -470,16 +470,26 @@ export function renderMistakeReviewPanel(container, ctx) {
     }
   }
 
-  async function copyIntegrationGuide() {
-    const guide = '在爱听写阅读结果页打开浏览器控制台，执行：\n' +
-      "fetch('https://ecoreal.github.io/study-tracker/js/idictation-bridge.js?v=1').then(r => r.text()).then(eval)\n" +
-      '同步完成后切回 Study Tracker；也可以直接导出阅读错题本.xlsx，再点击“导入阅读错题本”。';
-    try {
-      await navigator.clipboard.writeText(guide);
-      toast('同步助手说明已复制', 'success');
-    } catch {
-      modal({ title: '爱听写同步助手', size: 'md', body: el('pre', { className: 'integration-code', text: guide }), confirmText: '关闭' });
-    }
+  function openIntegrationGuide() {
+    const loader = "javascript:(()=>{const s=document.createElement('script');s.src='https://ecoreal.github.io/study-tracker/js/idictation-bridge.js?v=2';document.documentElement.appendChild(s)})()";
+    const bookmark = el('a', {
+      className: 'btn btn-primary integration-bookmark',
+      href: loader,
+      draggable: 'true',
+      text: '爱听写同步',
+      title: '拖到浏览器书签栏后使用',
+    });
+    modal({
+      title: '安装爱听写同步按钮',
+      size: 'md',
+      confirmText: '完成',
+      body: el('div', { className: 'integration-install' }, [
+        el('p', { text: '将这个按钮拖到浏览器书签栏：' }),
+        el('div', { className: 'integration-bookmark-row' }, [bookmark]),
+        el('p', { className: 'muted', text: '以后打开爱听写阅读结果页，点击书签栏里的“爱听写同步”，授权弹窗后即可自动导入。' }),
+        el('p', { className: 'muted', text: '电脑端适用；手机端仍可直接导出阅读错题本.xlsx后导入。' }),
+      ]),
+    });
   }
 
   function stat(label, value, sub) {
