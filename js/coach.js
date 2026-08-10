@@ -5,6 +5,7 @@
  */
 
 import { todayStr } from './store.js';
+import { getReviewSummary } from './review.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COMPONENT_LABELS = {
@@ -37,6 +38,7 @@ export function buildCoachPlan(data, now = new Date()) {
   const remainingMinutes = Math.max(0, goalMinutes - focusToday);
   const remainingCount = Math.max(0, goalCount - focusCount);
   const suggestedRound = suggestRound({ remainingMinutes, recentAverage, nextTask, taskMinutes });
+  const review = getReviewSummary(data, now);
 
   let headline = '先做一个最小可行动作';
   let detail = '把想学的内容写成一个 25 分钟内能完成的任务，开始比规划更重要。';
@@ -44,7 +46,12 @@ export function buildCoachPlan(data, now = new Date()) {
   let actionLabel = '添加任务';
   let actionTask = null;
 
-  if (overdueTasks.length) {
+  if (review.scheduledDue > 0) {
+    headline = `${review.scheduledDue} 项记忆已经到期`;
+    detail = `先完成到期复习，再加入最多 ${review.newAvailable} 项新内容，避免短板重新遗忘。`;
+    action = 'review';
+    actionLabel = '开始复习';
+  } else if (overdueTasks.length) {
     headline = `有 ${overdueTasks.length} 项任务需要重新安排`;
     detail = '先把逾期项带回今天，再逐项确认是否继续，避免旧计划被遗忘。';
     action = 'rollover';
@@ -55,6 +62,11 @@ export function buildCoachPlan(data, now = new Date()) {
     action = 'start';
     actionLabel = `开始 ${suggestedRound} 分钟`;
     actionTask = nextTask;
+  } else if (review.todayDue > 0 && !nextTask) {
+    headline = `今天学习 ${review.todayDue} 项新内容`;
+    detail = '新内容会根据你的回忆难度自动安排下一次出现时间。';
+    action = 'review';
+    actionLabel = '开始记忆';
   } else if (!todayTasks.length && focusToday === 0) {
     headline = '先明确一个 25 分钟可完成的结果';
     detail = '写下具体产出，例如“完成听力 Section 1 并订正”，再开始计时。';
@@ -82,6 +94,7 @@ export function buildCoachPlan(data, now = new Date()) {
   if (weakestIelts) {
     signals.push(`雅思优先补 ${weakestIelts.label}`);
   }
+  if (review.todayDue > 0) signals.push(`今日记忆 ${review.todayDue} 项`);
 
   return {
     today,
@@ -99,6 +112,7 @@ export function buildCoachPlan(data, now = new Date()) {
     recentAverage,
     completionRate,
     weakestIelts,
+    review,
     headline,
     detail,
     action,

@@ -21,8 +21,9 @@ function dayKey(d) {
  */
 export function buildIndexes(data) {
   const focusByDay = new Map();   // date -> minutes (focus sessions only)
-  const activeByDay = new Map();  // date -> true (any activity incl. ielts/tasks)
+  const activeByDay = new Map();  // date -> true (any activity incl. reviews/ielts/tasks)
   const ieltsDates = new Set(data.ielts.map((i) => i.date));
+  const reviewsByDay = new Map();
 
   for (const s of data.sessions) {
     if (s.type !== 'focus' || !s.date) continue;
@@ -31,10 +32,17 @@ export function buildIndexes(data) {
   for (const t of data.tasks) {
     if (t.done && t.date) activeByDay.set(t.date, true);
   }
+  for (const log of data.reviewLogs || []) {
+    const reviewedAt = new Date(log.reviewedAt || '');
+    if (Number.isNaN(reviewedAt.getTime())) continue;
+    const date = todayStr(reviewedAt);
+    reviewsByDay.set(date, (reviewsByDay.get(date) || 0) + 1);
+    activeByDay.set(date, true);
+  }
   for (const d of focusByDay.keys()) activeByDay.set(d, true);
   for (const d of ieltsDates) activeByDay.set(d, true);
 
-  return { focusByDay, activeByDay, ieltsDates };
+  return { focusByDay, activeByDay, ieltsDates, reviewsByDay };
 }
 
 function isActiveDay(data, date) {
@@ -89,10 +97,15 @@ export function monthSummary(data, ref = new Date()) {
   const prefix = `${y}-${String(m + 1).padStart(2, '0')}`;
   const focusSessions = data.sessions.filter((s) => s.date.startsWith(prefix) && s.type === 'focus');
   const ielts = data.ielts.filter((i) => i.date.startsWith(prefix));
+  const reviewCount = (data.reviewLogs || []).filter((log) => {
+    const reviewedAt = new Date(log.reviewedAt || '');
+    return !Number.isNaN(reviewedAt.getTime()) && todayStr(reviewedAt).startsWith(prefix);
+  }).length;
   return {
     focusCount: focusSessions.length,
     focusMinutes: focusSessions.reduce((a, s) => a + (s.minutes || 0), 0),
     ieltsCount: ielts.length,
+    reviewCount,
   };
 }
 
@@ -113,7 +126,9 @@ export function heatmap(data, weeks = 12, end = new Date()) {
     d.setDate(start.getDate() + i);
     const key = dayKey(d);
     const focusMin = idx.focusByDay.get(key) || 0;
-    const score = focusMin + (idx.ieltsDates.has(key) ? 30 : 0);
+    const score = focusMin
+      + (idx.ieltsDates.has(key) ? 30 : 0)
+      + Math.min(60, (idx.reviewsByDay.get(key) || 0) * 2);
     let level = 0;
     if (score > 0) level = 1;
     if (score >= 30) level = 2;

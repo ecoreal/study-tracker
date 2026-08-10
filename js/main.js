@@ -22,6 +22,7 @@ const VIEWS = {
 
 let currentView = 'dashboard';
 let renderQueued = false;
+let skipNextStoreRender = false;
 /** When true, next store-driven re-render is skipped for timer view (duration edits still apply via pomodoro). */
 let skipTimerRerender = false;
 
@@ -32,16 +33,16 @@ const themeBtn = document.getElementById('theme-toggle');
 const miniMount = document.getElementById('mini-bar-root');
 
 const ctx = {
-  navigate(view) {
+  navigate(view, subview = '') {
     if (!VIEWS[view]) return;
-    if (currentView === view && document.body.dataset.view === view) {
+    if (currentView === view && document.body.dataset.view === view && !subview) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
     currentView = view;
     const nextUrl = view === 'dashboard'
       ? `${location.pathname}${location.search}`
-      : `#${view}`;
+      : `#${view}${subview ? `=${subview}` : ''}`;
     history.pushState(null, '', nextUrl);
     paintNav();
     render();
@@ -53,6 +54,10 @@ const ctx = {
   /** Call before updateSettings from timer page to avoid wiping inputs */
   suppressTimerRerender() {
     skipTimerRerender = true;
+  },
+  /** Keep stateful workflows (for example a review session) mounted for one store write. */
+  suppressNextStoreRender() {
+    skipNextStoreRender = true;
   },
 };
 
@@ -82,6 +87,10 @@ function render() {
 }
 
 function queueRender() {
+  if (skipNextStoreRender) {
+    skipNextStoreRender = false;
+    return;
+  }
   if (renderQueued) return;
   renderQueued = true;
   requestAnimationFrame(() => {

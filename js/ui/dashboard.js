@@ -4,10 +4,11 @@ import { streakDays, todayFocusStats, todayTasksStats, weekFocusMinutes } from '
 import { formatBand, bandOf } from '../ielts.js';
 import * as pomodoro from '../pomodoro.js';
 import { buildCoachPlan, formatMinutes } from '../coach.js';
+import { getReviewSummary } from '../review.js';
 
 /**
  * @param {HTMLElement} root
- * @param {{ navigate: (v: string) => void, refresh: () => void }} ctx
+ * @param {{ navigate: (v: string, subview?: string) => void, refresh: () => void }} ctx
  */
 export function renderDashboard(root, ctx) {
   const data = getData();
@@ -26,6 +27,7 @@ export function renderDashboard(root, ctx) {
   const countGoal = Math.max(1, goals.focusCount || 4);
   const pState = pomodoro.getState();
   const coach = buildCoachPlan(data);
+  const review = getReviewSummary(data);
 
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()];
   const greet = greeting();
@@ -71,6 +73,8 @@ export function renderDashboard(root, ctx) {
       summaryBanner(data, today),
 
       smartCoachCard(coach, ctx),
+
+      reviewDashboardCard(review, ctx),
 
       el('section', { className: 'card' }, [
         el('div', { className: 'card-header' }, [
@@ -180,6 +184,37 @@ export function renderDashboard(root, ctx) {
   root._cleanup = () => live.unsub();
 }
 
+function reviewDashboardCard(review, ctx) {
+  const hasContent = review.words + review.mistakes > 0;
+  return el('section', { className: 'card dashboard-review-card' }, [
+    el('div', { className: 'dashboard-review-main' }, [
+      el('div', {}, [
+        el('div', { className: 'card-header' }, [
+          el('h3', { text: '今日记忆复习' }),
+          hasContent ? el('span', { className: 'badge', text: 'FSRS' }) : null,
+        ]),
+        el('p', {
+          className: 'muted',
+          text: hasContent
+            ? review.todayDue
+              ? `${review.scheduledDue} 项到期 · ${review.newAvailable} 项新内容`
+              : `今天已完成 ${review.reviewedToday} 项，暂无到期内容`
+            : '导入词表或 iDictation 错题后开始安排',
+        }),
+      ]),
+      hasContent
+        ? el('strong', { className: 'dashboard-review-count', text: String(review.todayDue) })
+        : null,
+    ]),
+    el('button', {
+      type: 'button',
+      className: `btn ${review.todayDue ? 'btn-primary' : 'btn-ghost'}`,
+      text: hasContent ? (review.todayDue ? '开始复习' : '查看进度') : '导入词表',
+      onClick: () => ctx.navigate('ielts', hasContent ? 'review' : 'vocabulary'),
+    }),
+  ]);
+}
+
 function smartCoachCard(plan, ctx) {
   const action = el('button', {
     type: 'button',
@@ -204,6 +239,8 @@ function smartCoachCard(plan, ctx) {
       if (plan.action === 'start' || plan.action === 'timer') {
         ctx.navigate('timer');
         pomodoro.start();
+      } else if (plan.action === 'review') {
+        ctx.navigate('ielts', 'review');
       } else if (plan.action === 'stats') {
         ctx.navigate('stats');
       } else {
@@ -413,10 +450,15 @@ function summaryBanner(data, today) {
   const taskCount = data.tasks.filter((t) => t.date === today && t.done).length;
   const ieltsCount = data.ielts.filter((i) => i.date === today).length;
   const focusCount = data.sessions.filter((s) => s.date === today && s.type === 'focus').length;
+  const reviewCount = (data.reviewLogs || []).filter((log) => {
+    const reviewedAt = new Date(log.reviewedAt || '');
+    return !Number.isNaN(reviewedAt.getTime()) && todayStr(reviewedAt) === today;
+  }).length;
   const parts = [];
   if (focusCount) parts.push(`🍅 ${focusCount} 个番茄`);
   if (taskCount) parts.push(`✅ ${taskCount} 项任务`);
   if (ieltsCount) parts.push(`🎯 ${ieltsCount} 次雅思`);
+  if (reviewCount) parts.push(`${reviewCount} 项复习`);
   if (!parts.length) return null;
   return el('div', {
     className: 'card',

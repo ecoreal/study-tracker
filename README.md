@@ -1,6 +1,6 @@
 # Study Tracker
 
-个人学习面板：每日任务 / 番茄钟 / 雅思真题得分 / 统计打卡。  
+个人学习面板：每日任务 / 番茄钟 / 雅思真题得分 / FSRS 记忆复习 / 统计打卡。
 数据默认存在浏览器 `localStorage`，可选同步到 **私有 GitHub Gist**。
 
 **在线地址：** https://ecoreal.github.io/study-tracker/
@@ -12,6 +12,8 @@
 - **番茄钟**：专注 / 短休 / 长休，环形倒计时，刷新续时，桌面通知与提示音，标题栏显示剩余时间
 - **任务**：按日待办，智能排序，结转到今天，一键关联番茄钟
 - **雅思得分**：四科 band + Overall（可自动计算），听力/阅读 Part 级正确率统计、结构化错题本、目标分达标分析、历史趋势图
+- **智能复习**：用 `ts-fsrs` 根据 Again / Hard / Good / Easy 自动安排错题和单词，看词回忆与拼写自测两种模式
+- **词库联动**：导入通用 JSON 词表、iDictation 错词 Excel 与阅读错题 Excel，按词形/题号去重并加入复习计划
 - **统计**：连续打卡、近 7 日专注柱状图、近 16 周热力图、基于近 14 日数据的智能复盘
 - **Gist 同步**：多设备通过 PAT 读写同一私有 Gist
 - **导入 / 导出 JSON** 备份
@@ -47,7 +49,7 @@ gh api -X POST repos/ecoreal/study-tracker/pages -f build_type=legacy -f source[
 
 ## 技术说明
 
-- 纯静态：HTML + CSS + 原生 ES Modules，无构建步骤、无依赖
+- 纯静态：HTML + CSS + 原生 ES Modules，无构建步骤；`ts-fsrs` 与 Excel 解析器固定版本并按需加载
 - 冲突策略：整包按 `updatedAt` 取较新一方；建议单主设备编辑
 - 雅思 Overall：四科平均后按常见 0.5 分段规则取整（`.25`→`.5`，`.75`→进位），支持基于 40 题 raw score 估算 band 并计算达到目标分所需的正确率
 

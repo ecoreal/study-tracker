@@ -117,7 +117,8 @@ export function correctRatePct(v) {
 /**
  * Normalize one mistake: accepts legacy string or rich object.
  * @returns {null | {id:string, part:number|null, ans:string, orig:string, sub:string,
- *            reason:string, tag:string, note:string,
+ *            reason:string, tag:string, note:string, question:string,
+ *            userAnswer:string, correctAnswer:string, externalRef:string, source:string,
  *            createdAt:string}}
  */
 export function normalizeMistake(m, defaultPart = null) {
@@ -137,6 +138,12 @@ export function normalizeMistake(m, defaultPart = null) {
       reason: '',
       tag: '',
       note: '',
+      question: '',
+      userAnswer: '',
+      correctAnswer: '',
+      externalRef: '',
+      source: '',
+      review: null,
       createdAt: '',
     };
   }
@@ -150,6 +157,12 @@ export function normalizeMistake(m, defaultPart = null) {
     reason: String(m.reason ?? '').trim(),
     tag: String(m.tag ?? '').trim(),
     note: String(m.note ?? '').trim(),
+    question: String(m.question ?? '').trim(),
+    userAnswer: String(m.userAnswer ?? '').trim(),
+    correctAnswer: String(m.correctAnswer ?? '').trim(),
+    externalRef: String(m.externalRef ?? '').trim(),
+    source: String(m.source ?? '').trim(),
+    review: m.review && typeof m.review === 'object' ? { ...m.review } : null,
     createdAt: m.createdAt || '',
   };
 }
@@ -162,7 +175,9 @@ export function mistakeIsEmpty(m) {
     String(m.ans || '').trim() === '' &&
     String(m.orig || '').trim() === '' &&
     String(m.sub || '').trim() === '' &&
-    String(m.reason || '').trim() === ''
+    String(m.reason || '').trim() === '' &&
+    String(m.question || '').trim() === '' &&
+    String(m.correctAnswer || '').trim() === ''
   );
 }
 
@@ -173,6 +188,9 @@ export function mistakeText(m) {
   const bits = [];
   if (m.part != null && m.part !== '') bits.push(`P${m.part}`);
   if (m.ans) bits.push(m.ans);
+  if (m.question) bits.push(m.question);
+  if (m.userAnswer) bits.push(`答:${m.userAnswer}`);
+  if (m.correctAnswer) bits.push(`正:${m.correctAnswer}`);
   if (m.orig) bits.push(`原:${m.orig}`);
   if (m.sub) bits.push(`同替:${m.sub}`);
   if (m.reason) bits.push(`因:${m.reason}`);
@@ -273,4 +291,4 @@ function iso(d) {
 
 /* ---- mistake tags ---- */
 export const MISTAKE_TAGS = ['定位错误', '同替没听出', '词汇量不足', '连读吞音', '多选漏选', '粗心', '时间不够', '其他'];
-export const QUESTION_TAGS_READING = ['定位错误', 'T/F/NG 混淆', '同义替换', '长难句', '段落主旨', '时间不够', '粗心', '其他'];
+export const QUESTION_TAGS_READING = ['定位错误', 'T/F/NG 混淆', '同义替换', '长难句', '段落主旨', '时间不够', '粗心', 'iDictation', '其他'];

@@ -6,7 +6,7 @@ const STORAGE_KEY = 'study-tracker:data';
 const META_KEY = 'study-tracker:meta';
 
 const DEFAULT_DATA = () => ({
-  version: 1,
+  version: 2,
   updatedAt: new Date().toISOString(),
   settings: {
     pomodoro: { focus: 25, shortBreak: 5, longBreak: 15, longEvery: 4 },
@@ -19,10 +19,13 @@ const DEFAULT_DATA = () => ({
     autoStartNext: false, // 番茄结束后自动开始下一阶段
     dailyGoals: { focusMinutes: 120, focusCount: 4 },
     ieltsGoals: { listening: null, reading: null, overall: null },
+    review: { dailyNewLimit: 20, wordMode: 'recognition' },
   },
   tasks: [],
   sessions: [],
   ielts: [],
+  vocabulary: [],
+  reviewLogs: [],
 });
 
 /** @type {ReturnType<typeof DEFAULT_DATA>} */
@@ -60,14 +63,26 @@ function migrate(raw) {
         ...base.settings.ieltsGoals,
         ...(raw.settings?.ieltsGoals || {}),
       },
+      review: {
+        ...base.settings.review,
+        ...(raw.settings?.review || {}),
+      },
       subjects: Array.isArray(raw.settings?.subjects) && raw.settings.subjects.length
         ? raw.settings.subjects
         : base.settings.subjects,
     },
     tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
     sessions: Array.isArray(raw.sessions) ? raw.sessions : [],
-    ielts: Array.isArray(raw.ielts) ? raw.ielts : [],
-    version: 1,
+    ielts: Array.isArray(raw.ielts)
+      ? raw.ielts.map((entry) => normalizeIelts(entry, { ensureIds: true }))
+      : [],
+    vocabulary: Array.isArray(raw.vocabulary)
+      ? raw.vocabulary.map((entry) => normalizeVocabularyEntry(entry)).filter(Boolean)
+      : [],
+    reviewLogs: Array.isArray(raw.reviewLogs)
+      ? raw.reviewLogs.map(normalizeReviewLog).filter(Boolean).slice(0, 5000)
+      : [],
+    version: 2,
   };
 }
 
@@ -235,6 +250,191 @@ export function removeIelts(id) {
   persist();
 }
 
+/** Merge imported words by normalized spelling so repeated iDictation exports stay idempotent. */
+export function upsertVocabulary(entries) {
+  const rows = Array.isArray(entries) ? entries : [];
+  const byWord = new Map(data.vocabulary.map((item) => [wordKey(item.word), item]));
+  const result = { added: 0, updated: 0, skipped: 0, total: 0 };
+
+  for (const raw of rows) {
+    const next = normalizeVocabularyEntry(raw);
+    if (!next) {
+      result.skipped += 1;
+      continue;
+    }
+    result.total += 1;
+    const key = wordKey(next.word);
+    const current = byWord.get(key);
+    if (!current) {
+      data.vocabulary.push(next);
+      byWord.set(key, next);
+      result.added += 1;
+      continue;
+    }
+    const before = JSON.stringify(current);
+    for (const field of ['definition', 'phonetic', 'example', 'exampleTranslation', 'related', 'source', 'chapter', 'errorSpelling']) {
+      if (!current[field] && next[field]) current[field] = next[field];
+    }
+    current.errorCount = Math.max(Number(current.errorCount) || 0, Number(next.errorCount) || 0);
+    if (JSON.stringify(current) === before) result.skipped += 1;
+    else {
+      current.updatedAt = new Date().toISOString();
+      result.updated += 1;
+    }
+  }
+
+  if (result.added || result.updated) persist();
+  return result;
+}
+
+export function addVocabulary(entry) {
+  const result = upsertVocabulary([entry]);
+  if (!result.added) return data.vocabulary.find((item) => wordKey(item.word) === wordKey(entry?.word)) || null;
+  return data.vocabulary[data.vocabulary.length - 1] || null;
+}
+
+export function updateVocabulary(id, patch) {
+  const idx = data.vocabulary.findIndex((item) => item.id === id);
+  if (idx < 0) return null;
+  const next = normalizeVocabularyEntry({ ...data.vocabulary[idx], ...patch, id });
+  if (!next) return null;
+  data.vocabulary[idx] = next;
+  persist();
+  return next;
+}
+
+export function removeVocabulary(id) {
+  const before = data.vocabulary.length;
+  data.vocabulary = data.vocabulary.filter((item) => item.id !== id);
+  if (data.vocabulary.length !== before) persist();
+}
+
+/** Import normalized listening/reading mistakes without duplicating a previous export. */
+export function importIeltsMistakes(records) {
+  const rows = Array.isArray(records) ? records : [];
+  const result = { added: 0, updated: 0, skipped: 0, total: 0 };
+  let changed = false;
+
+  for (const record of rows) {
+    const subject = record?.subject === 'listening' ? 'listening' : 'reading';
+    const paper = String(record?.paper || 'iDictation 导入').trim();
+    let item = data.ielts.find((entry) => String(entry.paper || '').trim() === paper);
+    if (!item) {
+      item = {
+        id: uid('i'),
+        date: validDate(record?.date) || todayStr(),
+        paper,
+        mode: subject,
+        listening: null,
+        reading: null,
+        writing: null,
+        speaking: null,
+        overall: null,
+        notes: '由 iDictation / 外部文件导入',
+        createdAt: new Date().toISOString(),
+      };
+      data.ielts.unshift(item);
+      changed = true;
+    }
+
+    const oldSection = item[subject];
+    const section = oldSection && typeof oldSection === 'object'
+      ? oldSection
+      : {
+          band: toBand(oldSection),
+          correctRate: 0,
+          mistakes: [],
+        };
+    if (!Array.isArray(section.mistakes)) section.mistakes = [];
+
+    const next = normalizeMistakeLocal({
+      ...record,
+      id: record.id || uid('m'),
+      source: record.source || 'iDictation',
+      createdAt: record.createdAt || new Date().toISOString(),
+    });
+    if (!next || mistakeIsEmptyLocal(next)) {
+      result.skipped += 1;
+      continue;
+    }
+    result.total += 1;
+    const signature = mistakeImportKey(next);
+    const existingIndex = section.mistakes.findIndex((mistake) => {
+      const normalized = normalizeMistakeLocal(mistake);
+      return normalized && mistakeImportKey(normalized) === signature;
+    });
+    if (existingIndex < 0) {
+      section.mistakes.push(next);
+      result.added += 1;
+      changed = true;
+    } else {
+      const current = normalizeMistakeLocal(section.mistakes[existingIndex]);
+      const merged = {
+        ...current,
+        ...next,
+        id: current.id || next.id,
+        review: current.review || next.review,
+        createdAt: current.createdAt || next.createdAt,
+      };
+      if (JSON.stringify(current) === JSON.stringify(merged)) result.skipped += 1;
+      else {
+        section.mistakes[existingIndex] = merged;
+        result.updated += 1;
+        changed = true;
+      }
+    }
+    item[subject] = section;
+  }
+
+  if (changed) persist();
+  return result;
+}
+
+/** Store the card generated by ts-fsrs on either a word or a nested IELTS mistake. */
+export function applyReviewResult({ kind, id, card, rating, reviewedAt, wasNew = false }) {
+  const normalizedCard = normalizeReviewCard(card);
+  if (!normalizedCard) return false;
+  let found = false;
+  if (kind === 'word') {
+    const word = data.vocabulary.find((item) => item.id === id);
+    if (word) {
+      word.review = normalizedCard;
+      word.updatedAt = new Date().toISOString();
+      found = true;
+    }
+  } else if (kind === 'mistake') {
+    for (const entry of data.ielts) {
+      for (const subject of ['listening', 'reading']) {
+        const mistakes = entry[subject] && typeof entry[subject] === 'object'
+          ? entry[subject].mistakes
+          : null;
+        if (!Array.isArray(mistakes)) continue;
+        const mistake = mistakes.find((item) => item && item.id === id);
+        if (mistake) {
+          mistake.review = normalizedCard;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+  }
+  if (!found) return false;
+
+  data.reviewLogs.unshift({
+    id: uid('r'),
+    kind,
+    itemId: id,
+    rating: Math.min(4, Math.max(1, Number(rating) || 1)),
+    reviewedAt: reviewedAt || new Date().toISOString(),
+    nextDue: normalizedCard.due,
+    wasNew: Boolean(wasNew),
+  });
+  data.reviewLogs = data.reviewLogs.slice(0, 5000);
+  persist();
+  return true;
+}
+
 function toBand(v) {
   if (v === '' || v == null || Number.isNaN(Number(v))) return null;
   let n = Math.round(Number(v) * 2) / 2;
@@ -250,6 +450,7 @@ export function updateSettings(patch) {
     pomodoro: { ...data.settings.pomodoro, ...(patch.pomodoro || {}) },
     dailyGoals: { ...data.settings.dailyGoals, ...(patch.dailyGoals || {}) },
     ieltsGoals: { ...(data.settings.ieltsGoals || {}), ...(patch.ieltsGoals || {}) },
+    review: { ...(data.settings.review || {}), ...(patch.review || {}) },
   };
   if (patch.subjects) data.settings.subjects = [...patch.subjects];
   persist();
@@ -342,7 +543,11 @@ function normalizeMistakeLocal(m) {
   if (typeof m === 'string') {
     const ans = m.trim();
     if (!ans) return null;
-    return { id: '', part: null, ans, orig: '', sub: '', reason: '', tag: '', note: '', createdAt: '' };
+    return {
+      id: '', part: null, ans, orig: '', sub: '', reason: '', tag: '', note: '',
+      question: '', userAnswer: '', correctAnswer: '', externalRef: '', source: '',
+      review: null, createdAt: '',
+    };
   }
   if (m == null || typeof m !== 'object') return null;
   return {
@@ -354,6 +559,12 @@ function normalizeMistakeLocal(m) {
     reason: String(m.reason ?? '').trim(),
     tag: String(m.tag ?? '').trim(),
     note: String(m.note ?? '').trim(),
+    question: String(m.question ?? '').trim(),
+    userAnswer: String(m.userAnswer ?? '').trim(),
+    correctAnswer: String(m.correctAnswer ?? '').trim(),
+    externalRef: String(m.externalRef ?? '').trim(),
+    source: String(m.source ?? '').trim(),
+    review: normalizeReviewCard(m.review),
     createdAt: m.createdAt || '',
   };
 }
@@ -363,8 +574,92 @@ function mistakeIsEmptyLocal(m) {
     String(m.ans || '').trim() === '' &&
     String(m.orig || '').trim() === '' &&
     String(m.sub || '').trim() === '' &&
-    String(m.reason || '').trim() === ''
+    String(m.reason || '').trim() === '' &&
+    String(m.question || '').trim() === '' &&
+    String(m.correctAnswer || '').trim() === ''
   );
+}
+
+export function normalizeVocabularyEntry(raw) {
+  if (raw == null) return null;
+  const item = typeof raw === 'string' ? { word: raw } : raw;
+  if (typeof item !== 'object') return null;
+  const word = String(item.word ?? '').trim();
+  if (!word) return null;
+  const now = new Date().toISOString();
+  return {
+    id: item.id || uid('w'),
+    word,
+    definition: String(item.definition ?? '').trim(),
+    phonetic: String(item.phonetic ?? '').trim(),
+    example: String(item.example ?? '').trim(),
+    exampleTranslation: String(item.exampleTranslation ?? '').trim(),
+    related: String(item.related ?? '').trim(),
+    source: String(item.source ?? '').trim(),
+    chapter: String(item.chapter ?? '').trim(),
+    errorCount: Math.max(0, Math.round(Number(item.errorCount) || 0)),
+    errorSpelling: String(item.errorSpelling ?? '').trim(),
+    review: normalizeReviewCard(item.review),
+    createdAt: item.createdAt || now,
+    updatedAt: item.updatedAt || now,
+  };
+}
+
+export function normalizeReviewCard(card) {
+  if (!card || typeof card !== 'object') return null;
+  const due = validIso(card.due);
+  if (!due) return null;
+  const lastReview = validIso(card.last_review ?? card.lastReview);
+  const normalized = {
+    due,
+    stability: Math.max(0, Number(card.stability) || 0),
+    difficulty: Math.max(0, Number(card.difficulty) || 0),
+    elapsed_days: Math.max(0, Number(card.elapsed_days) || 0),
+    scheduled_days: Math.max(0, Number(card.scheduled_days) || 0),
+    learning_steps: Math.max(0, Number(card.learning_steps) || 0),
+    reps: Math.max(0, Math.round(Number(card.reps) || 0)),
+    lapses: Math.max(0, Math.round(Number(card.lapses) || 0)),
+    state: Math.min(3, Math.max(0, Math.round(Number(card.state) || 0))),
+  };
+  if (lastReview) normalized.last_review = lastReview;
+  return normalized;
+}
+
+function normalizeReviewLog(log) {
+  if (!log || typeof log !== 'object') return null;
+  const reviewedAt = validIso(log.reviewedAt);
+  if (!reviewedAt || !['word', 'mistake'].includes(log.kind)) return null;
+  return {
+    id: log.id || uid('r'),
+    kind: log.kind,
+    itemId: String(log.itemId || ''),
+    rating: Math.min(4, Math.max(1, Number(log.rating) || 1)),
+    reviewedAt,
+    nextDue: validIso(log.nextDue) || reviewedAt,
+    wasNew: Boolean(log.wasNew),
+  };
+}
+
+function mistakeImportKey(mistake) {
+  if (mistake.externalRef) return `${mistake.source}|${mistake.externalRef}`.toLowerCase();
+  return [mistake.source, mistake.part, mistake.question, mistake.correctAnswer, mistake.ans]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .join('|');
+}
+
+function wordKey(value) {
+  return String(value || '').trim().toLocaleLowerCase('en-US');
+}
+
+function validIso(value) {
+  if (value == null || value === '') return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function validDate(value) {
+  const text = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
 }
 
 function normalizePartStatsLocal(partStats) {

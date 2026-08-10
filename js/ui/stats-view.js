@@ -36,7 +36,7 @@ export function renderStats(root) {
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: '统计与打卡' }),
-          el('p', { text: '有专注番茄 / 雅思记录 / 完成任务，都算学习日。' }),
+          el('p', { text: '专注番茄、记忆复习、雅思记录和完成任务都算学习日。' }),
         ]),
       ]),
 
@@ -164,6 +164,14 @@ function coachInsightSection(plan) {
     insights.push({
       label: '雅思方向',
       text: `最近记录中${plan.weakestIelts.label}为相对短板（${plan.weakestIelts.value} 分），下一次练习优先安排这一科。`,
+    });
+  }
+  if (plan.review?.total) {
+    insights.push({
+      label: '记忆负荷',
+      text: plan.review.todayDue
+        ? `今天有 ${plan.review.todayDue} 项可学习，其中 ${plan.review.scheduledDue} 项已经到期。`
+        : `今天的复习已完成，当前有 ${plan.review.mature} 项进入长期记忆。`,
     });
   }
   if (!insights.length) {

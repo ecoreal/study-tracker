@@ -30,16 +30,23 @@ import {
   READING_AC_RAW_TO_BAND,
   READING_GT_RAW_TO_BAND,
 } from '../ielts.js';
+import {
+  renderReviewPanel,
+  renderVocabularyPanel,
+  renderReviewPreferences,
+} from './review-view.js';
 
 const SUBJECT_LABEL = { listening: '听力', reading: '阅读' };
 
-export function renderIelts(root) {
-  let activeTab = 'form'; // form | analysis | mistakes | records
+export function renderIelts(root, ctx) {
+  let activeTab = 'review';
   let mistakeFilter = 'all'; // all | listening | reading
 
   const viewRoot = el('div', { className: 'view' });
 
   const tabsWrap = el('div', { className: 'ielts-tabs', role: 'tablist' }, [
+    tabBtn('review', '今日复习'),
+    tabBtn('vocabulary', '词库'),
     tabBtn('form', '录入'),
     tabBtn('analysis', '学习分析'),
     tabBtn('mistakes', '错题本'),
@@ -52,6 +59,7 @@ export function renderIelts(root) {
     return el('button', {
       type: 'button',
       role: 'tab',
+      'aria-selected': activeTab === key ? 'true' : 'false',
       className: `ielts-tab${activeTab === key ? ' active' : ''}`,
       dataset: { tab: key },
       text: label,
@@ -63,13 +71,23 @@ export function renderIelts(root) {
     activeTab = key;
     tabsWrap.querySelectorAll('button').forEach((b) => {
       b.classList.toggle('active', b.dataset.tab === activeTab);
+      b.setAttribute('aria-selected', b.dataset.tab === activeTab ? 'true' : 'false');
     });
+    history.replaceState(null, '', `#ielts=${key}`);
     paintBody();
   }
 
   function paintBody() {
     bodyWrap.replaceChildren();
-    if (activeTab === 'form') renderForm(bodyWrap);
+    if (activeTab === 'review') renderReviewPanel(bodyWrap, {
+      suppressNextStoreRender: () => ctx.suppressNextStoreRender(),
+      openVocabulary: () => setTab('vocabulary'),
+      refreshView: () => paintBody(),
+    });
+    else if (activeTab === 'vocabulary') {
+      renderVocabularyPanel(bodyWrap, ctx);
+      renderReviewPreferences(bodyWrap, ctx);
+    } else if (activeTab === 'form') renderForm(bodyWrap);
     else if (activeTab === 'analysis') renderAnalysis(bodyWrap);
     else if (activeTab === 'mistakes') renderMistakes(bodyWrap);
     else if (activeTab === 'bandtable') renderBandTable(bodyWrap);
@@ -79,7 +97,7 @@ export function renderIelts(root) {
   viewRoot.append(
     el('div', { className: 'view-header' }, [
       el('h2', { text: '雅思学习' }),
-      el('p', { text: '录入练习/模考，跟踪分 Part 正确率与错题复盘。' }),
+      el('p', { text: '按遗忘曲线复习单词和错题，跟踪真题表现。' }),
     ]),
     tabsWrap,
     bodyWrap,
@@ -87,10 +105,11 @@ export function renderIelts(root) {
   root.append(viewRoot);
   // 允许通过 URL hash 直达 sub-tab：#ielts=analysis / mistakes / records
   const hashSub = (location.hash || '').match(/ielts=([a-z]+)/);
-  if (hashSub && ['form', 'analysis', 'mistakes', 'records', 'bandtable'].includes(hashSub[1])) {
+  if (hashSub && ['review', 'vocabulary', 'form', 'analysis', 'mistakes', 'records', 'bandtable'].includes(hashSub[1])) {
     activeTab = hashSub[1];
     tabsWrap.querySelectorAll('button').forEach((b) => {
       b.classList.toggle('active', b.dataset.tab === activeTab);
+      b.setAttribute('aria-selected', b.dataset.tab === activeTab ? 'true' : 'false');
     });
   }
   paintBody();
@@ -635,12 +654,6 @@ export function renderIelts(root) {
       return flat;
     }
 
-    const filterRow = el('div', { className: 'btn-row' }, [
-      filterBtn('all', '全部'),
-      filterBtn('listening', '听力'),
-      filterBtn('reading', '阅读'),
-      tagSelect,
-    ]);
     const tagOpts = ['', ...MISTAKE_TAGS];
     let tagFilterValue = '';
     const tagSelect = el('select', {
@@ -652,6 +665,12 @@ export function renderIelts(root) {
     }, [
       el('option', { value: '', text: '全部错因类型' }),
       ...tagOpts.filter(Boolean).map((t) => el('option', { value: t, text: t })),
+    ]);
+    const filterRow = el('div', { className: 'btn-row' }, [
+      filterBtn('all', '全部'),
+      filterBtn('listening', '听力'),
+      filterBtn('reading', '阅读'),
+      tagSelect,
     ]);
     const listRoot = el('div');
     function filterBtn(key, label) {
@@ -690,8 +709,10 @@ export function renderIelts(root) {
       const partLabel = mistake.part != null && mistake.part !== '' ? `P${mistake.part}` : '';
       const parts = [
         partLabel,
-        mistake.ans,
-        mistake.orig ? `原: ${mistake.orig}` : '',
+        mistake.externalRef || mistake.ans,
+        mistake.question,
+        mistake.userAnswer ? `答: ${mistake.userAnswer}` : '',
+        mistake.correctAnswer ? `正: ${mistake.correctAnswer}` : '',
         mistake.sub ? `同替: ${mistake.sub}` : '',
         mistake.reason ? `因: ${mistake.reason}` : '',
       ].filter(Boolean);
@@ -704,6 +725,7 @@ export function renderIelts(root) {
       ]);
       const body = el('div', { className: 'mistake-body' }, [
         el('div', { className: 'mistake-text', text: parts.join(' · ') || mistake.note || '(空)' }),
+        mistake.orig ? el('div', { className: 'mistake-original', text: mistake.orig }) : null,
         mistake.note ? el('div', { className: 'mistake-note', text: mistake.note }) : null,
       ]);
       const actions = el('div', { className: 'mistake-actions' }, [
@@ -779,19 +801,26 @@ export function renderIelts(root) {
     const orig = el('input', { type: 'text', value: mistake.orig || '' });
     const sub = el('input', { type: 'text', value: mistake.sub || '' });
     const reason = el('textarea', { rows: 3 }); reason.value = mistake.reason || '';
-    const tag = el('select', {}, [el('option', { value: '', text: '错因类型' }), ...tagOptions.map((t) => el('option', { value: t, text: t }))]);
+    const question = el('textarea', { rows: 3 }); question.value = mistake.question || '';
+    const userAnswer = el('input', { type: 'text', value: mistake.userAnswer || '' });
+    const correctAnswer = el('input', { type: 'text', value: mistake.correctAnswer || '' });
+    const allTags = mistake.tag && !tagOptions.includes(mistake.tag) ? [mistake.tag, ...tagOptions] : tagOptions;
+    const tag = el('select', {}, [el('option', { value: '', text: '错因类型' }), ...allTags.map((t) => el('option', { value: t, text: t }))]);
     tag.value = mistake.tag || '';
     const note = el('input', { type: 'text', value: mistake.note || '' });
 
     const isReview = mode === 'review';
     if (isReview) {
-      [ans, orig, sub, reason, note].forEach((i) => { i.disabled = true; });
+      [ans, orig, sub, reason, question, userAnswer, correctAnswer, note].forEach((i) => { i.disabled = true; });
       [partSel, tag].forEach((i) => { i.disabled = true; });
     }
 
     const body = el('div', { className: 'form-grid' }, [
       mkRow('Part', partSel),
       mkRow('题目 / 你的答案', ans),
+      mistake.question || mistake.correctAnswer ? mkRow('题目', question) : null,
+      mistake.userAnswer || mistake.correctAnswer ? mkRow('我的答案', userAnswer) : null,
+      mistake.correctAnswer ? mkRow('正确答案', correctAnswer) : null,
       mkRow('原文', orig),
       mkRow('同替', sub),
       mkRow('错因', reason),
@@ -812,6 +841,9 @@ export function renderIelts(root) {
         orig: orig.value.trim(),
         sub: sub.value.trim(),
         reason: reason.value.trim(),
+        question: question.value.trim(),
+        userAnswer: userAnswer.value.trim(),
+        correctAnswer: correctAnswer.value.trim(),
         tag: tag.value,
         note: note.value.trim(),
       });
