@@ -2428,6 +2428,16 @@ textarea {
   margin: 0;
 }
 
+.integration-definition,
+.integration-fallback {
+  display: grid;
+  gap: 4px;
+}
+
+.integration-shortcut {
+  font-size: 0.78rem;
+}
+
 .integration-bookmark-row {
   display: flex;
   justify-content: center;
@@ -2439,6 +2449,26 @@ textarea {
 
 .integration-bookmark {
   cursor: grab;
+}
+
+.integration-copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.integration-url {
+  min-width: 0;
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.integration-steps {
+  margin: 4px 0 0 20px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
 }
 
 .import-preview,

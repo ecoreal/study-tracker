@@ -479,15 +479,52 @@ export function renderMistakeReviewPanel(container, ctx) {
       text: '爱听写同步',
       title: '拖到浏览器书签栏后使用',
     });
+    const address = el('input', {
+      type: 'text',
+      className: 'integration-url',
+      value: loader,
+      readonly: true,
+      spellcheck: 'false',
+      onClick: (event) => event.target.select(),
+    });
     modal({
       title: '安装爱听写同步按钮',
       size: 'md',
       confirmText: '完成',
       body: el('div', { className: 'integration-install' }, [
-        el('p', { text: '将这个按钮拖到浏览器书签栏：' }),
+        el('div', { className: 'integration-definition' }, [
+          el('strong', { text: '什么是书签栏？' }),
+          el('p', { className: 'muted', text: '就是浏览器顶部、网址下方那一排常用网站快捷按钮。' }),
+        ]),
+        el('p', { text: '方式一：先显示书签栏，再把下面的按钮拖进去。' }),
+        el('p', { className: 'muted integration-shortcut', text: 'Chrome / Edge：Ctrl + Shift + B（Mac：Command + Shift + B）' }),
         el('div', { className: 'integration-bookmark-row' }, [bookmark]),
-        el('p', { className: 'muted', text: '以后打开爱听写阅读结果页，点击书签栏里的“爱听写同步”，授权弹窗后即可自动导入。' }),
-        el('p', { className: 'muted', text: '电脑端适用；手机端仍可直接导出阅读错题本.xlsx后导入。' }),
+        el('div', { className: 'integration-fallback' }, [
+          el('p', { text: '拖不动时，使用方式二：复制地址创建书签。' }),
+          el('div', { className: 'integration-copy-row' }, [
+            address,
+            el('button', {
+              type: 'button',
+              className: 'btn btn-ghost btn-sm',
+              text: '复制地址',
+              onClick: async () => {
+                address.select();
+                try {
+                  await navigator.clipboard.writeText(loader);
+                  toast('书签地址已复制', 'success');
+                } catch {
+                  toast('地址已选中，请按 Ctrl+C 复制', 'info');
+                }
+              },
+            }),
+          ]),
+          el('ol', { className: 'integration-steps' }, [
+            el('li', { text: '在当前浏览器按 Ctrl+D（Mac：Command+D）新建书签。' }),
+            el('li', { text: '把书签名称改成“爱听写同步”，把网址替换为刚复制的地址。' }),
+            el('li', { text: '以后打开爱听写阅读结果页，点击这个书签即可同步。' }),
+          ]),
+        ]),
+        el('p', { className: 'muted', text: '手机浏览器通常没有可用的书签栏，手机端可以直接导出阅读错题本.xlsx后导入。' }),
       ]),
     });
   }
