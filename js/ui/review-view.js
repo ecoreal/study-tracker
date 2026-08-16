@@ -471,7 +471,7 @@ export function renderMistakeReviewPanel(container, ctx) {
   }
 
   function openIntegrationGuide() {
-    const loader = "javascript:(()=>{const s=document.createElement('script');s.src='https://ecoreal.github.io/study-tracker/js/idictation-bridge.js?v=3';document.documentElement.appendChild(s)})()";
+    const loader = "javascript:(()=>{const s=document.createElement('script');s.src='https://ecoreal.github.io/study-tracker/js/idictation-bridge.js?v=4';document.documentElement.appendChild(s)})()";
     const bookmark = el('a', {
       className: 'btn btn-primary integration-bookmark',
       href: loader,

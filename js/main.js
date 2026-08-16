@@ -140,27 +140,32 @@ window.addEventListener('message', (event) => {
   if (event.origin !== 'https://www.idictation.cn') return;
   const payload = event.data;
   if (!payload || !['study-tracker:reading-sync', 'study-tracker:reading-mistakes'].includes(payload.type)) return;
-  const mistakes = (payload.mistakes || payload.records || []).filter((record) => record && typeof record === 'object');
+  const keep = (list) => (Array.isArray(list) ? list : []).filter((record) => record && typeof record === 'object');
+  const readingMistakes = keep(payload.mistakes || payload.records);
+  const listeningMistakes = keep(payload.listeningMistakes);
   // Full 40-question papers get a band from the shared raw->band tables in ielts.js.
-  const attempts = (payload.practiceRecords || [])
-    .filter((record) => record && typeof record === 'object')
-    .map((record) => ({
-      ...record,
-      band: Number(record.questionCount) === 40 && record.scope !== 'part'
-        ? bandFromRaw(record.variant === 'reading-gt' ? 'reading-gt' : 'reading', record.correctCount)
-        : null,
-    }));
-  if (!mistakes.length && !attempts.length) {
-    toast('爱听写没有返回可同步的阅读记录', 'error');
+  const attempts = keep(payload.practiceRecords).map((record) => ({
+    ...record,
+    band: Number(record.questionCount) === 40 && record.scope !== 'part'
+      ? bandFromRaw(record.variant === 'reading-gt' ? 'reading-gt' : 'reading', record.correctCount)
+      : null,
+  }));
+  if (!readingMistakes.length && !listeningMistakes.length && !attempts.length) {
+    toast('爱听写没有返回可同步的记录', 'error');
     return;
   }
   const attemptResult = upsertIeltsPracticeRecords(attempts);
-  const mistakeResult = importIeltsMistakes(mistakes.map((record) => ({ ...record, subject: 'reading' })));
-  const changed = attemptResult.added + attemptResult.updated + mistakeResult.added + mistakeResult.updated;
-  toast(
-    `爱听写同步完成：${attemptResult.added} 条新做题记录，${mistakeResult.added} 道新错题`,
-    changed ? 'success' : 'info',
-  );
+  // Default subject reading; the bridge sets 'listening' on its own records.
+  const readingResult = importIeltsMistakes(readingMistakes.map((record) => ({ subject: 'reading', ...record })));
+  const listeningResult = importIeltsMistakes(listeningMistakes.map((record) => ({ subject: 'listening', ...record })));
+  const changed = attemptResult.added + attemptResult.updated + readingResult.added + readingResult.updated
+    + listeningResult.added + listeningResult.updated;
+  const parts = [
+    `${attemptResult.added} 条做题记录`,
+    `${readingResult.added} 道阅读错题`,
+    `${listeningResult.added} 道听力错题`,
+  ];
+  toast(`爱听写同步完成：${parts.join('，')}`, changed ? 'success' : 'info');
 });
 
 window.addEventListener('popstate', () => {
@@ -260,7 +265,6 @@ render();
 initSync()
   .catch(() => {})
   .then(() => seedBundledVocabulary())
-  .then(() => seedBundledReadingMistakes())
   .catch(() => {});
 
 console.info('[study-tracker] ready');
@@ -280,23 +284,5 @@ async function seedBundledVocabulary() {
   });
   if (result.added || result.updated) {
     toast(`已自动导入 538 考点词，新增 ${result.added} 个`, 'success');
-  }
-}
-
-async function seedBundledReadingMistakes() {
-  const meta = getMeta();
-  if (meta.bundledReadingMistakesVersion === 'reading-xlsx-v1') return;
-  const response = await fetch('./data/阅读错题本.json', { cache: 'no-cache' });
-  if (!response.ok) return;
-  const payload = await response.json();
-  const records = Array.isArray(payload) ? payload : payload.records;
-  if (!Array.isArray(records) || !records.length) return;
-  const result = importIeltsMistakes(records);
-  setMeta({
-    bundledReadingMistakesVersion: 'reading-xlsx-v1',
-    bundledReadingMistakesCount: records.length,
-  });
-  if (result.added || result.updated) {
-    toast(`已导入阅读错题本，新增 ${result.added} 道`, 'success');
   }
 }

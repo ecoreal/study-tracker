@@ -9,24 +9,37 @@
   }
 
   try {
-    const [mistakePayload, resultPayload] = await Promise.all([
+    // v1 = reading error book, v2 = listening error book (verified against
+    // the site's own bundle: index-ce218f30.js). A listening failure must
+    // not break the reading sync.
+    const [mistakePayload, listeningPayload, resultPayload] = await Promise.all([
       request('/api/study/yuedu-zhenti/v1/errors-new', { page: 1, page_size: 1000 }),
+      request('/api/study/zhenti/v2/errors-new', { page: 1, page_size: 1000 }).catch(() => null),
       readCurrentResult(),
     ]);
-    const mistakes = collectMistakes(mistakePayload);
+    const mistakes = collectMistakes(mistakePayload, 'reading', '爱听写 · 阅读错题');
+    const listeningMistakes = collectMistakes(listeningPayload, 'listening', '爱听写 · 听力错题');
     const practiceRecords = collectPracticeRecords(resultPayload);
-    if (!mistakes.length && !practiceRecords.length) {
-      alert('当前页面没有识别到可同步的阅读成绩或错题。请在完成作答后的阅读结果页使用。');
+    if (!mistakes.length && !listeningMistakes.length && !practiceRecords.length) {
+      alert('当前页面没有识别到可同步的成绩或错题。请在完成作答后的结果页使用。');
       return;
     }
-    const message = { type: 'study-tracker:reading-sync', mistakes, practiceRecords };
+    // Legacy type name on purpose: old SW-cached pages only understand
+    // 'reading-mistakes' + records; new pages read every field below.
+    const message = {
+      type: 'study-tracker:reading-mistakes',
+      records: mistakes,
+      mistakes,
+      practiceRecords,
+      listeningMistakes,
+    };
     const send = () => target.postMessage(message, targetOrigin);
     send();
     setTimeout(send, 1200);
     setTimeout(send, 3000);
-    alert(`已发送 ${practiceRecords.length} 条做题记录和 ${mistakes.length} 道错题，请切回 Study Tracker 查看。`);
+    alert(`已发送 ${practiceRecords.length} 条做题记录、${mistakes.length} 道阅读错题和 ${listeningMistakes.length} 道听力错题，请切回 Study Tracker 查看。`);
   } catch (error) {
-    alert(error.message || '同步失败，请确认已登录爱听写并位于阅读结果页');
+    alert(error.message || '同步失败，请确认已登录爱听写并位于结果页');
   }
 
   async function request(url, data) {
@@ -126,29 +139,29 @@
     Object.entries(value).forEach(([key, item]) => walkResults(item, out, key, depth + 1));
   }
 
-  function collectMistakes(value) {
+  function collectMistakes(value, subject, sourceLabel) {
     const found = [];
-    walkMistakes(parseMaybeJson(value), found, 0);
+    walkMistakes(parseMaybeJson(value), found, 0, subject, sourceLabel);
     const unique = new Map();
     for (const record of found) {
-      const key = [record.externalRef, record.question, record.correctAnswer].join('|').toLowerCase();
+      const key = [record.subject, record.externalRef, record.question, record.correctAnswer].join('|').toLowerCase();
       if (key && !unique.has(key)) unique.set(key, record);
     }
     return [...unique.values()];
   }
 
-  function walkMistakes(value, found, depth) {
+  function walkMistakes(value, found, depth, subject, sourceLabel) {
     if (depth > 8 || value == null) return;
     const parsed = parseMaybeJson(value);
-    if (parsed !== value) return walkMistakes(parsed, found, depth + 1);
-    if (Array.isArray(value)) return value.forEach((item) => walkMistakes(item, found, depth + 1));
+    if (parsed !== value) return walkMistakes(parsed, found, depth + 1, subject, sourceLabel);
+    if (Array.isArray(value)) return value.forEach((item) => walkMistakes(item, found, depth + 1, subject, sourceLabel));
     if (typeof value !== 'object') return;
-    const record = normalizeMistake(value);
+    const record = normalizeMistake(value, subject, sourceLabel);
     if (record) found.push(record);
-    else Object.values(value).forEach((item) => walkMistakes(item, found, depth + 1));
+    else Object.values(value).forEach((item) => walkMistakes(item, found, depth + 1, subject, sourceLabel));
   }
 
-  function normalizeMistake(row) {
+  function normalizeMistake(row, subject, sourceLabel) {
     const externalRef = text(pick(row, ['题号', 'questionNo', 'question_number', 'questionNumber', 'number', 'externalRef']));
     const question = text(pick(row, ['题目', 'question', 'questionText', 'question_text', 'stem', 'content']));
     const correctAnswer = text(pick(row, ['正确答案', 'correctAnswer', 'correct_answer', 'answer', 'rightAnswer']));
@@ -156,15 +169,15 @@
     const userAnswer = text(pick(row, ['我的答案', 'userAnswer', 'user_answer', 'yourAnswer', 'selectedAnswer']));
     if (!externalRef && !question && !correctAnswer) return null;
     const rawRef = externalRef || text(pick(row, ['id', 'question_id']));
-    const partMatch = rawRef.match(/Passage\s*(\d+)/i);
+    const partMatch = rawRef.match(/(?:Passage|Part|Section)\s*(\d+)/i);
     const paper = text(pick(row, ['paper', 'paperName', 'testName', 'test_name', 'examName']))
       || rawRef.replace(/\s+Passage\s*\d+.*$/i, '').trim() || '爱听写阅读错题';
     return {
-      subject: 'reading', paper,
+      subject, paper,
       date: normalizeDate(pick(row, ['日期', 'date', 'createdAt', 'created_at'])),
       part: partMatch ? Number(partMatch[1]) : null,
       ans: rawRef, orig: original, question, userAnswer, correctAnswer, externalRef: rawRef,
-      note: text(pick(row, ['笔记', 'note', 'notes'])), source: '爱听写 · 阅读错题',
+      note: text(pick(row, ['笔记', 'note', 'notes'])), source: sourceLabel,
     };
   }
 

@@ -48,7 +48,7 @@
   --bg-muted: #242a27;
   --text: #eef2f0;
   --text-muted: #9ba6a1;
-  --border: #343b38;
+  --border: #414a46;
   --primary: #2dd4bf;
   --primary-hover: #5eead4;
   --primary-soft: #134e4a;
@@ -59,7 +59,7 @@
   --success: #4ade80;
   --success-soft: #14532d;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 10px 28px rgba(0, 0, 0, 0.24);
-  --ring-track: #343b38;
+  --ring-track: #414a46;
   --ring-focus: #2dd4bf;
   --ring-break: #38bdf8;
   --ring-long: #a78bfa;
@@ -68,6 +68,15 @@
   --heat-2: #006d32;
   --heat-3: #26a641;
   --heat-4: #39d353;
+}
+
+/* Interactive outlines need >=3:1 against dark cards (WCAG 1.4.11);
+   structural --border stays subtler — visible text carries those. */
+[data-theme="dark"] .btn-ghost,
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  border-color: #5f6a66;
 }
 
 /* 字号缩放 */
