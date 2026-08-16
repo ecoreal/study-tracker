@@ -28,6 +28,8 @@ export function renderDashboard(root, ctx) {
   const pState = pomodoro.getState();
   const coach = buildCoachPlan(data);
   const review = getReviewSummary(data);
+  const lastWeekTotal = weekFocusMinutes(data, new Date(Date.now() - 7 * 86400000))
+    .reduce((a, d) => a + d.minutes, 0);
 
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()];
   const greet = greeting();
@@ -36,9 +38,13 @@ export function renderDashboard(root, ctx) {
   root.append(
     el('div', { className: 'view' }, [
       el('div', { className: 'view-header' }, [
-        el('div', {}, [
+        el('div', { className: 'hero-greet' }, [
           el('h2', { text: greet }),
-          el('p', { text: `${today} 星期${weekday} · 连续学习 ${streak} 天${examCountdown(data.settings?.ieltsGoals?.examDate, today)}` }),
+          el('p', { className: 'muted', text: `${today} 星期${weekday}` }),
+          el('div', { className: 'chip-row' }, [
+            el('span', { className: 'chip', text: `🔥 连续学习 ${streak} 天` }),
+            examCountdownChip(data.settings?.ieltsGoals?.examDate, today),
+          ]),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -59,14 +65,22 @@ export function renderDashboard(root, ctx) {
       live.el,
 
       el('div', { className: 'grid-4' }, [
-        stat('今日番茄', String(focus.count), `目标 ${countGoal} 个`),
-        stat('专注时长', `${focus.minutes} 分`, focus.minutes ? `目标 ${minGoal} 分钟` : '目标 120 分钟'),
+        stat('今日番茄', String(focus.count), `目标 ${countGoal} 个`, { icon: '🍅', countUp: focus.count }),
+        stat('专注时长', `${focus.minutes} 分`, focus.minutes ? `目标 ${minGoal} 分钟` : `目标 120 分钟`, {
+          icon: '⏱️',
+          spark: sparkline(week.map((d) => d.minutes)),
+        }),
         stat(
           '待办完成',
           tasks.total ? `${tasks.done}/${tasks.total}` : '0',
           tasks.total ? `${Math.round(tasks.rate * 100)}%` : '添加一个任务吧',
+          { icon: '✅' },
         ),
-        stat('本周专注', `${weekTotal}`, '分钟'),
+        stat('本周专注', `${weekTotal}`, '分钟', {
+          icon: '📈',
+          countUp: weekTotal,
+          delta: weekDelta(weekTotal, lastWeekTotal),
+        }),
       ]),
 
       /* 今日概览横幅 */
@@ -181,6 +195,7 @@ export function renderDashboard(root, ctx) {
     ]),
   );
 
+  animateCounts(root);
   root._cleanup = () => live.unsub();
 }
 
@@ -345,16 +360,23 @@ function createLiveTimer(ctx) {
   return { el: slot, unsub };
 }
 
-/** '· 距考试 N 天' suffix; exam day / past dates get their own wording or nothing. */
-function examCountdown(dateStr, today) {
-  if (!dateStr) return '';
+/** Days until the exam; null when unset/invalid, negative when past. */
+function examDaysAway(dateStr, today) {
+  if (!dateStr) return null;
   const exam = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(exam.getTime())) return '';
-  const days = Math.round((exam - new Date(`${today}T00:00:00`)) / 86400000);
-  if (days < 0) return '';
-  if (days === 0) return ' · 今天考试，加油！';
-  if (days <= 7) return ` · 距考试仅剩 ${days} 天`;
-  return ` · 距考试 ${days} 天`;
+  if (Number.isNaN(exam.getTime())) return null;
+  return Math.round((exam - new Date(`${today}T00:00:00`)) / 86400000);
+}
+
+/** Dashboard chip: 🔥 streak always, 📅 countdown when it is still ahead. */
+function examCountdownChip(dateStr, today) {
+  const days = examDaysAway(dateStr, today);
+  if (days == null || days < 0) return null;
+  if (days === 0) return el('span', { className: 'chip chip-hot', text: '📅 今天考试，加油！' });
+  return el('span', {
+    className: days <= 7 ? 'chip chip-hot' : 'chip',
+    text: `📅 距考试 ${days} 天`,
+  });
 }
 
 function greeting() {  const h = new Date().getHours();
@@ -366,12 +388,69 @@ function greeting() {  const h = new Date().getHours();
   return '夜深了，注意休息';
 }
 
-function stat(label, value, hint) {
+function stat(label, value, hint, extra = {}) {
   return el('div', { className: 'card stat-card' }, [
-    el('div', { className: 'stat-label', text: label }),
+    el('div', { className: 'stat-top' }, [
+      el('div', { className: 'stat-label', text: label }),
+      extra.icon ? el('span', { className: 'stat-icon', text: extra.icon, 'aria-hidden': 'true' }) : null,
+    ]),
     el('div', { className: 'stat-value', text: value }),
-    el('div', { className: 'stat-hint', text: hint }),
+    el('div', { className: 'stat-bottom' }, [
+      hint ? el('span', { className: 'stat-hint', text: hint }) : null,
+      extra.delta
+        ? el('span', {
+          className: `stat-delta ${extra.delta.up ? 'up' : 'down'}`,
+          text: `${extra.delta.up ? '↑' : '↓'} ${extra.delta.text}`,
+        })
+        : null,
+    ]),
+    extra.spark ? el('div', { className: 'stat-spark' }, [extra.spark]) : null,
   ]);
+}
+
+/** Signed week-over-week change; only meaningful once last week has data. */
+function weekDelta(total, last) {
+  if (!last || last <= 0) return null;
+  const pct = Math.round(Math.abs(total - last) / last * 100);
+  if (!pct) return null;
+  return { up: total >= last, text: `较上周 ${pct}%` };
+}
+
+/**
+ * Stat-tile sparkline: 2px line in the de-emphasized ink, last point accented
+ * with a 2px surface ring (dataviz mark spec). Pure SVG, no interaction.
+ */
+function sparkline(points, w = 96, h = 26) {
+  const values = (points.length ? points : [0]).map((v) => Number(v) || 0);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = max - min || 1;
+  const step = values.length > 1 ? (w - 4) / (values.length - 1) : 0;
+  const coords = values.map((v, i) => {
+    const x = 2 + i * step;
+    const y = h - 3 - ((v - min) / span) * (h - 6);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const [lx, ly] = coords[coords.length - 1].split(',');
+  const svg = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true" focusable="false"><polyline points="${coords.join(' ')}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="3" fill="var(--accent-var)" stroke="var(--bg-elevated)" stroke-width="2"/></svg>`;
+  return el('span', { className: 'spark', html: svg });
+}
+
+/** Ease-out count-up for standalone numeric stat values (skips reduced motion). */
+function animateCounts(container) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  container.querySelectorAll('.stat-value').forEach((node) => {
+    const target = Number(node.textContent);
+    if (!Number.isFinite(target) || target <= 0) return;
+    const start = performance.now();
+    const duration = Math.min(900, 300 + target * 60);
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / duration);
+      node.textContent = String(Math.round(target * (1 - (1 - p) ** 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
 }
 
 function taskQuickList(tasks, ctx, coach) {

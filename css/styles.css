@@ -460,10 +460,12 @@ a {
 }
 
 .stat-value {
-  font-size: 1.6rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin-top: 6px;
+  /* 展示值用比例数字；tabular-nums 只用于需要对齐的列 */
 }
 
 .stat-hint {
@@ -3343,4 +3345,177 @@ body[data-view="timer"] .mini-bar-root {
 .sync-log-item {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* ===== 视觉升级：hero 问候区 / 统计卡片 / 动效（2026-08-16） ===== */
+
+/* 页面氛围光晕：右上角低透明度径向渐变，随主题 token 变色 */
+#app::before {
+  content: '';
+  position: fixed;
+  top: -20vw;
+  right: -15vw;
+  width: 55vw;
+  height: 55vw;
+  max-width: 820px;
+  max-height: 820px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent-var) 8%, transparent),
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* hero 问候区 */
+.hero-greet {
+  padding: calc(14px * var(--space-unit)) calc(18px * var(--space-unit));
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent-var) 18%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-var) 10%, var(--bg-elevated)),
+      var(--bg-elevated) 60%
+    );
+}
+
+.hero-greet h2 {
+  margin: 0;
+}
+
+.hero-greet .muted {
+  margin: 2px 0 0;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+}
+
+.chip-hot {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+/* 统计卡片：图标徽章 / 底部行 / delta / 迷你趋势线 */
+.stat-card {
+  display: grid;
+  gap: 2px;
+}
+
+.stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 1.05rem;
+  border-radius: 10px;
+  background: var(--bg-muted);
+}
+
+.stat-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stat-bottom .stat-hint {
+  margin-top: 0;
+}
+
+.stat-delta {
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stat-delta.up {
+  color: var(--success);
+}
+
+.stat-delta.down {
+  color: var(--danger);
+}
+
+.stat-spark {
+  display: flex;
+  margin-top: 8px;
+  color: var(--text-muted);
+}
+
+/* 视图入场：轻微上浮 + 逐级延迟 */
+.view > * {
+  animation: rise-in 0.32s ease both;
+}
+
+.view > *:nth-child(2) { animation-delay: 0.03s; }
+.view > *:nth-child(3) { animation-delay: 0.06s; }
+.view > *:nth-child(4) { animation-delay: 0.09s; }
+.view > *:nth-child(5) { animation-delay: 0.12s; }
+.view > *:nth-child(n+6) { animation-delay: 0.15s; }
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 桌面端卡片悬停微抬升 */
+@media (pointer: fine) {
+  .card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.12s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 31, 28, 0.08), 0 10px 24px rgba(15, 31, 28, 0.06);
+  }
+}
+
+[data-theme="dark"] .card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view > *,
+  .card {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .card:hover {
+    transform: none;
+  }
 }
