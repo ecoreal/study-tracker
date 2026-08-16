@@ -38,7 +38,7 @@ export function renderDashboard(root, ctx) {
       el('div', { className: 'view-header' }, [
         el('div', {}, [
           el('h2', { text: greet }),
-          el('p', { text: `${today} 星期${weekday} · 连续学习 ${streak} 天` }),
+          el('p', { text: `${today} 星期${weekday} · 连续学习 ${streak} 天${examCountdown(data.settings?.ieltsGoals?.examDate, today)}` }),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -345,8 +345,19 @@ function createLiveTimer(ctx) {
   return { el: slot, unsub };
 }
 
-function greeting() {
-  const h = new Date().getHours();
+/** '· 距考试 N 天' suffix; exam day / past dates get their own wording or nothing. */
+function examCountdown(dateStr, today) {
+  if (!dateStr) return '';
+  const exam = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(exam.getTime())) return '';
+  const days = Math.round((exam - new Date(`${today}T00:00:00`)) / 86400000);
+  if (days < 0) return '';
+  if (days === 0) return ' · 今天考试，加油！';
+  if (days <= 7) return ` · 距考试仅剩 ${days} 天`;
+  return ` · 距考试 ${days} 天`;
+}
+
+function greeting() {  const h = new Date().getHours();
   if (h < 5) return '夜深了，注意休息';
   if (h < 11) return '早上好';
   if (h < 14) return '中午好';

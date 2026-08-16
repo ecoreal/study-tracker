@@ -582,6 +582,14 @@ export function setMeta(patch) {
   return next;
 }
 
+/** Keep the last iDictation sync outcomes (device-local, newest first). */
+export function appendSyncLog(entry) {
+  const log = getMeta().syncLog || [];
+  log.unshift({ at: new Date().toISOString(), ...entry });
+  setMeta({ syncLog: log.slice(0, 20) });
+  return log;
+}
+
 export function clearMeta() {
   localStorage.removeItem(META_KEY);
 }

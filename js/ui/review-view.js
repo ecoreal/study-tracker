@@ -1,6 +1,7 @@
 import { el, modal, toast } from './components.js';
 import {
   getData,
+  getMeta,
   upsertVocabulary,
   addVocabulary,
   updateVocabulary,
@@ -418,7 +419,7 @@ export function renderMistakeReviewPanel(container, ctx) {
           el('h3', { text: '爱听写同步' }),
           el('span', { className: 'badge', text: '安装一次即可' }),
         ]),
-        el('p', { className: 'muted', text: '把下面的同步按钮拖到浏览器书签栏。以后在爱听写阅读结果页点击它，就会自动同步到这里。' }),
+        el('p', { className: 'muted', text: '把同步按钮拖到浏览器书签栏。在任何爱听写页面点击它都能同步阅读/听力错题本；在阅读结果页点击还会同步本次做题成绩。' }),
         el('div', { className: 'btn-row' }, [
           el('a', {
             className: 'btn btn-ghost',
@@ -434,8 +435,28 @@ export function renderMistakeReviewPanel(container, ctx) {
             onClick: openIntegrationGuide,
           }),
         ]),
+        syncLogBlock(),
       ]),
     );
+  }
+
+  /** Newest-first list of past iDictation syncs (device-local). */
+  function syncLogBlock() {
+    const log = (getMeta().syncLog || []).slice(0, 10);
+    if (!log.length) return null;
+    return el('div', { className: 'sync-log' }, [
+      el('div', { className: 'sync-log-title', text: '最近同步' }),
+      ...log.map((entry) => el('div', {
+        className: 'sync-log-item',
+        text: `${formatSyncTime(entry.at)} · 新增 ${entry.records || 0} 条做题记录、${entry.reading || 0} 道阅读错题、${entry.listening || 0} 道听力错题`,
+      })),
+    ]);
+  }
+
+  function formatSyncTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
   async function importReadingFile(file) {

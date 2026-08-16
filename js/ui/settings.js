@@ -44,6 +44,7 @@ export function renderSettings(root, ctx) {
   const goalListening = bandSelect(ieltsGoals.listening);
   const goalReading = bandSelect(ieltsGoals.reading);
   const goalOverall = bandSelect(ieltsGoals.overall);
+  const examDateIn = el('input', { type: 'date', value: ieltsGoals.examDate || '' });
 
   const themeSelect = el('select', {}, [
     el('option', { value: 'system', text: '跟随系统' }),
@@ -214,6 +215,7 @@ export function renderSettings(root, ctx) {
           fieldRow('听力目标分', goalListening),
           fieldRow('阅读目标分', goalReading),
           fieldRow('总分目标', goalOverall),
+          fieldRow('考试日期', examDateIn),
         ]),
         el('div', { className: 'btn-row' }, [
           el('button', {
@@ -226,6 +228,7 @@ export function renderSettings(root, ctx) {
                   listening: goalListening.value === '' ? null : Number(goalListening.value),
                   reading: goalReading.value === '' ? null : Number(goalReading.value),
                   overall: goalOverall.value === '' ? null : Number(goalOverall.value),
+                  examDate: examDateIn.value === '' ? null : examDateIn.value,
                 },
               });
               toast('雅思目标分已保存', 'success');

@@ -3323,3 +3323,24 @@ body[data-view="timer"] .mini-bar-root {
     flex-direction: column;
   }
 }
+
+/* 爱听写同步历史 */
+.sync-log {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 3px;
+}
+
+.sync-log-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.sync-log-item {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

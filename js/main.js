@@ -1,4 +1,4 @@
-import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary, importIeltsMistakes, upsertIeltsPracticeRecords } from './store.js';
+import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary, importIeltsMistakes, upsertIeltsPracticeRecords, appendSyncLog } from './store.js';
 import { bandFromRaw } from './ielts.js';
 import { schedulePush, initSync, subscribeSync } from './gist.js';
 import { applyTheme, toggleTheme, watchSystemTheme, applyAppearance } from './theme.js';
@@ -166,6 +166,14 @@ window.addEventListener('message', (event) => {
     `${listeningResult.added} 道听力错题`,
   ];
   toast(`爱听写同步完成：${parts.join('，')}`, changed ? 'success' : 'info');
+  // Bridge retries the same message 3x; no-op repeats (changed === 0) stay out of the log.
+  if (changed) {
+    appendSyncLog({
+      records: attemptResult.added,
+      reading: readingResult.added,
+      listening: listeningResult.added,
+    });
+  }
 });
 
 window.addEventListener('popstate', () => {
