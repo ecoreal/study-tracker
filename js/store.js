@@ -227,6 +227,8 @@ export function addIelts(entry) {
     speaking: normalized.speaking,
     overall: normalized.overall,
     notes: normalized.notes,
+    source: normalized.source,
+    externalRef: normalized.externalRef,
     createdAt: new Date().toISOString(),
   };
   data.ielts.unshift(item);
@@ -248,6 +250,73 @@ export function updateIelts(id, patch) {
 export function removeIelts(id) {
   data.ielts = data.ielts.filter((x) => x.id !== id);
   persist();
+}
+
+/** Merge practice attempts from an external system by its stable result id. */
+export function upsertIeltsPracticeRecords(records) {
+  const rows = Array.isArray(records) ? records : [];
+  const result = { added: 0, updated: 0, skipped: 0, total: 0 };
+  let changed = false;
+
+  for (const raw of rows) {
+    const externalRef = String(raw?.externalRef || '').trim();
+    const paper = String(raw?.paper || '').trim();
+    const questionCount = Math.max(0, Math.round(Number(raw?.questionCount) || 0));
+    const correctCount = Math.min(questionCount || Infinity, Math.max(0, Math.round(Number(raw?.correctCount) || 0)));
+    if (!externalRef || !paper || !questionCount) {
+      result.skipped += 1;
+      continue;
+    }
+    result.total += 1;
+    const correctRate = Math.min(1, Math.max(0, Number(raw.correctRate) || correctCount / questionCount));
+    const nextReading = normalizeIeltsSection({
+      band: raw.band,
+      correctRate,
+      correctCount,
+      questionCount,
+      mistakes: [],
+    }, true);
+    const current = data.ielts.find((entry) => entry.externalRef === externalRef);
+    if (!current) {
+      data.ielts.unshift({
+        id: uid('i'),
+        date: validDate(raw.date) || todayStr(),
+        paper,
+        mode: 'reading',
+        listening: null,
+        reading: nextReading,
+        writing: null,
+        speaking: null,
+        overall: null,
+        notes: String(raw.notes || '爱听写自动同步').trim(),
+        source: String(raw.source || 'iDictation').trim(),
+        externalRef,
+        createdAt: new Date().toISOString(),
+      });
+      result.added += 1;
+      changed = true;
+      continue;
+    }
+    const before = JSON.stringify(current);
+    const oldReading = current.reading && typeof current.reading === 'object' ? current.reading : {};
+    current.date = validDate(raw.date) || current.date;
+    current.paper = paper || current.paper;
+    current.mode = 'reading';
+    current.source = String(raw.source || current.source || 'iDictation').trim();
+    current.notes = String(raw.notes || current.notes || '爱听写自动同步').trim();
+    current.reading = {
+      ...nextReading,
+      mistakes: Array.isArray(oldReading.mistakes) ? oldReading.mistakes : [],
+    };
+    if (JSON.stringify(current) === before) result.skipped += 1;
+    else {
+      result.updated += 1;
+      changed = true;
+    }
+  }
+
+  if (changed) persist();
+  return result;
 }
 
 /** Merge imported words by normalized spelling so repeated iDictation exports stay idempotent. */
@@ -538,6 +607,8 @@ export function normalizeIelts(entry, { ensureIds = true } = {}) {
   if (next.paper != null) next.paper = String(next.paper).trim();
   if (next.mode != null) next.mode = String(next.mode);
   if (next.notes != null) next.notes = String(next.notes).trim();
+  if (next.source != null) next.source = String(next.source).trim();
+  if (next.externalRef != null) next.externalRef = String(next.externalRef).trim();
   if (next.date == null) next.date = todayStr();
   for (const k of ['listening', 'reading']) {
     next[k] = normalizeIeltsSection(next[k], ensureIds);
@@ -556,6 +627,8 @@ function normalizeIeltsSection(value, ensureIds) {
   const out = {
     band: value.band != null ? toBand(value.band) : (value.score != null ? toBand(value.score) : null),
     correctRate: value.correctRate != null ? clamp01(value.correctRate) : null,
+    correctCount: Math.max(0, Math.round(Number(value.correctCount) || 0)),
+    questionCount: Math.max(0, Math.round(Number(value.questionCount) || 0)),
     mistakes: Array.isArray(value.mistakes)
       ? value.mistakes
           .map((m) => normalizeMistakeLocal(m))
@@ -570,7 +643,7 @@ function normalizeIeltsSection(value, ensureIds) {
   };
   if (out.correctRate == null) out.correctRate = 0;
   if (out.partStats == null) delete out.partStats;
-  const hasStats = out.partStats != null && Object.keys(out.partStats).length > 0;
+  const hasStats = (out.partStats != null && Object.keys(out.partStats).length > 0) || out.questionCount > 0;
   if (out.band == null && out.mistakes.length === 0 && !hasStats) return out.correctRate > 0 ? out : null;
   return out;
 }

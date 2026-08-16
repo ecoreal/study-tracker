@@ -1,4 +1,5 @@
-import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary, importIeltsMistakes } from './store.js';
+import { getData, subscribe, setOnChangeHook, updateSettings, getMeta, setMeta, upsertVocabulary, importIeltsMistakes, upsertIeltsPracticeRecords } from './store.js';
+import { bandFromRaw } from './ielts.js';
 import { schedulePush, initSync, subscribeSync } from './gist.js';
 import { applyTheme, toggleTheme, watchSystemTheme, applyAppearance } from './theme.js';
 import { toast } from './ui/components.js';
@@ -133,19 +134,33 @@ window.addEventListener('hashchange', () => {
   if (previous !== currentView || document.body.dataset.view !== currentView) render();
 });
 
-// Optional same-session bridge from the logged-in iDictation page. The bridge
-// runs on iDictation's own origin, then sends normalized reading mistakes here.
+// Same-session bridge from the logged-in iDictation page. It runs on
+// iDictation's origin, then sends normalized attempts and mistakes here.
 window.addEventListener('message', (event) => {
   if (event.origin !== 'https://www.idictation.cn') return;
   const payload = event.data;
-  if (!payload || payload.type !== 'study-tracker:reading-mistakes' || !Array.isArray(payload.records)) return;
-  const records = payload.records.filter((record) => record && typeof record === 'object');
-  if (!records.length) {
-    toast('爱听写没有返回可导入的阅读错题', 'error');
+  if (!payload || !['study-tracker:reading-sync', 'study-tracker:reading-mistakes'].includes(payload.type)) return;
+  const mistakes = (payload.mistakes || payload.records || []).filter((record) => record && typeof record === 'object');
+  // Full 40-question papers get a band from the shared raw->band tables in ielts.js.
+  const attempts = (payload.practiceRecords || [])
+    .filter((record) => record && typeof record === 'object')
+    .map((record) => ({
+      ...record,
+      band: Number(record.questionCount) === 40 && record.scope !== 'part'
+        ? bandFromRaw(record.variant === 'reading-gt' ? 'reading-gt' : 'reading', record.correctCount)
+        : null,
+    }));
+  if (!mistakes.length && !attempts.length) {
+    toast('爱听写没有返回可同步的阅读记录', 'error');
     return;
   }
-  const result = importIeltsMistakes(records.map((record) => ({ ...record, subject: 'reading' })));
-  toast(`已从爱听写同步阅读错题：新增 ${result.added} 道`, result.added ? 'success' : 'info');
+  const attemptResult = upsertIeltsPracticeRecords(attempts);
+  const mistakeResult = importIeltsMistakes(mistakes.map((record) => ({ ...record, subject: 'reading' })));
+  const changed = attemptResult.added + attemptResult.updated + mistakeResult.added + mistakeResult.updated;
+  toast(
+    `爱听写同步完成：${attemptResult.added} 条新做题记录，${mistakeResult.added} 道新错题`,
+    changed ? 'success' : 'info',
+  );
 });
 
 window.addEventListener('popstate', () => {
