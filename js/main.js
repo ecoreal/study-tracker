@@ -279,7 +279,8 @@ console.info('[study-tracker] ready');
 
 async function seedBundledVocabulary() {
   const meta = getMeta();
-  if (meta.bundledVocabularyVersion === '538-v1') return;
+  // v2: re-import once to backfill structured headword/synonyms onto v1 entries.
+  if (meta.bundledVocabularyVersion === '538-v2') return;
   const response = await fetch('./雅思阅读538考点词.json', { cache: 'no-cache' });
   if (!response.ok) return;
   const source = await response.json();
@@ -287,7 +288,7 @@ async function seedBundledVocabulary() {
   if (!words.length) return;
   const result = upsertVocabulary(words);
   setMeta({
-    bundledVocabularyVersion: '538-v1',
+    bundledVocabularyVersion: '538-v2',
     bundledVocabularyCount: words.length,
   });
   if (result.added || result.updated) {

@@ -3580,3 +3580,24 @@ body[data-view="timer"] .mini-bar-root {
 .learn-card .word-related {
   margin: 8px 0 0;
 }
+
+/* ===== 同替配对训练（2026-08-17） ===== */
+
+.cluster-chips {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.cluster-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.choice-option.word-option {
+  text-align: center;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}

@@ -147,7 +147,7 @@ export function renderReviewPanel(container, ctx) {
     }
     const item = session.queue[session.index];
     const reviewSettings = getData().settings?.review || {};
-    const mode = ['spelling', 'choice'].includes(reviewSettings.wordMode) ? reviewSettings.wordMode : 'recognition';
+    const mode = ['spelling', 'choice', 'synonym'].includes(reviewSettings.wordMode) ? reviewSettings.wordMode : 'synonym';
     // 不背单词-style: a brand-new word gets a learning pass first, then comes
     // back as a quiz at the end of today's queue.
     const isLearnPass = item.kind === 'word' && !item.card && !session.learnedIds.has(item.id);
@@ -194,7 +194,8 @@ export function renderReviewPanel(container, ctx) {
           item.word.definition
             ? el('p', { className: 'learn-definition', text: item.word.definition })
             : el('p', { className: 'muted', text: '暂无释义' }),
-          item.word.related ? el('p', { className: 'word-related', text: `同义替换：${item.word.related}` }) : null,
+          clusterChips(clusterOf(item.word))
+            || (item.word.related ? el('p', { className: 'word-related', text: `同义替换：${item.word.related}` }) : null),
         ]),
         el('button', {
           type: 'button',
@@ -225,6 +226,18 @@ export function renderReviewPanel(container, ctx) {
   }
 
   function renderWordPrompt(root, word, mode, reveal) {
+    // 538 的精髓：考点词 ↔ 同替词的双向识别（英文→英文，还原真题的替换链）
+    if (mode === 'synonym') {
+      const partner = synonymPartner(word);
+      if (partner) {
+        const options = buildSynonymOptions(word, partner);
+        if (options) {
+          renderWordChoice(root, word, options, reveal, '选出它的同义替换', partner);
+          return;
+        }
+      }
+      // 没有结构化同替关系的词回退到释义选择/认读
+    }
     if (mode === 'choice' && word.definition) {
       const options = buildChoiceOptions(word);
       if (options) {
@@ -289,6 +302,78 @@ export function renderReviewPanel(container, ctx) {
     setTimeout(() => input.focus(), 50);
   }
 
+  /** 词群 chips：首个（考点词）高亮，其余为同替词。 */
+  function clusterChips(cluster) {
+    if (!cluster || cluster.length < 2) return null;
+    return el('div', { className: 'chip-row cluster-chips' }, [
+      el('span', { className: 'cluster-label', text: '同替链' }),
+      ...cluster.map((entry, i) => el('span', { className: `chip${i === 0 ? ' chip-hot' : ''}`, text: entry })),
+    ]);
+  }
+
+  /** 按拼写（忽略大小写/多余空格）在词库里找词条。 */
+  function findWord(text) {
+    const target = normalizeSpelling(text);
+    if (!target) return null;
+    return (getData().vocabulary || []).find((item) => normalizeSpelling(item.word) === target) || null;
+  }
+
+  /** 完整词群：考点词 → [考点词, ...同替]；同替词 → [考点词, ...其同替]。 */
+  function clusterOf(word) {
+    if (Array.isArray(word.synonyms) && word.synonyms.length) return [word.word, ...word.synonyms];
+    const head = String(word.headword || '').trim();
+    if (head && normalizeSpelling(head) !== normalizeSpelling(word.word)) {
+      const headEntry = findWord(head);
+      return headEntry && Array.isArray(headEntry.synonyms) && headEntry.synonyms.length
+        ? [head, ...headEntry.synonyms]
+        : [head, word.word];
+    }
+    return null;
+  }
+
+  /**
+   * 双向配对：考点词随机考它的一个同替词；同替词考它的考点词。
+   * @returns {{answer: string, cluster: string[]} | null}
+   */
+  function synonymPartner(word) {
+    const cluster = clusterOf(word);
+    if (!cluster) return null;
+    if (Array.isArray(word.synonyms) && word.synonyms.length) {
+      const answer = word.synonyms[Math.floor(Math.random() * word.synonyms.length)];
+      return { answer, cluster };
+    }
+    return { answer: cluster[0], cluster };
+  }
+
+  /**
+   * 同替四选一的干扰项：只用其他词群的成员（它们也都是"某词的同替"，
+   * 干扰性强），并且整群排除 —— 同群的词语义上同样正确，不能当错项。
+   */
+  function buildSynonymOptions(word, partner) {
+    const own = new Set([
+      normalizeSpelling(word.word),
+      normalizeSpelling(partner.answer),
+      ...(partner.cluster || []).map((entry) => normalizeSpelling(entry)),
+    ]);
+    const vocab = getData().vocabulary || [];
+    const candidates = [];
+    const seen = new Set();
+    for (const item of vocab) {
+      const label = String(item.word || '').trim();
+      const key = normalizeSpelling(label);
+      if (!label || own.has(key) || seen.has(key)) continue;
+      const isMember = (Array.isArray(item.synonyms) && item.synonyms.length)
+        || (String(item.headword || '').trim()
+          && normalizeSpelling(item.headword) !== normalizeSpelling(item.word));
+      if (!isMember) continue;
+      seen.add(key);
+      candidates.push(label);
+    }
+    const distractors = shuffle(candidates).slice(0, 3);
+    if (distractors.length < 3) return null;
+    return shuffle([{ text: partner.answer, correct: true }, ...distractors.map((d) => ({ text: d, correct: false }))]);
+  }
+
   /** 四选一：正确释义 + 3 个干扰项，同章节的优先（难度更接近）。 */
   function buildChoiceOptions(word) {
     const vocab = getData().vocabulary || [];
@@ -314,12 +399,12 @@ export function renderReviewPanel(container, ctx) {
     return shuffle([{ text: String(word.definition).trim(), correct: true }, ...distractors]);
   }
 
-  function renderWordChoice(root, word, options, reveal) {
+  function renderWordChoice(root, word, options, reveal, badgeText = '选出正确释义', partner = null) {
     let answered = false;
     root.append(
       el('div', { className: 'study-card-kicker' }, [
         el('span', { text: word.chapter || word.source || '词库' }),
-        el('span', { className: 'badge', text: '选出正确释义' }),
+        el('span', { className: 'badge', text: badgeText }),
       ]),
       el('div', { className: 'word-prompt' }, [
         el('h3', { text: word.word }),
@@ -327,7 +412,7 @@ export function renderReviewPanel(container, ctx) {
         speakButton(word.word),
       ]),
       el('div', { className: 'choice-grid' }, options.map((option) => {
-        const button = el('button', { type: 'button', className: 'choice-option' });
+        const button = el('button', { type: 'button', className: `choice-option${partner ? ' word-option' : ''}` });
         if (option.correct) button.dataset.correct = '1';
         button.append(document.createTextNode(option.text));
         button.addEventListener('click', () => {
@@ -380,7 +465,8 @@ export function renderReviewPanel(container, ctx) {
           word.definition ? el('p', { text: word.definition }) : el('p', { className: 'muted', text: '暂无释义' }),
         ]),
         word.errorSpelling ? el('p', { className: 'answer-line wrong', text: `曾错拼：${word.errorSpelling}` }) : null,
-        word.related ? el('p', { className: 'word-related', text: `同义替换：${word.related}` }) : null,
+        clusterChips(clusterOf(word))
+          || (word.related ? el('p', { className: 'word-related', text: `同义替换：${word.related}` }) : null),
         word.example ? el('blockquote', {}, [
           el('span', { text: word.example }),
           word.exampleTranslation ? el('small', { text: word.exampleTranslation }) : null,

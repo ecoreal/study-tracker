@@ -84,11 +84,20 @@ function normalizeWordRow(row, source) {
       '例句翻译', 'exampleTranslation', 'example_translate', 'example_tr', 'sentenceTranslation', '例句释义',
     ])),
     related: relatedText(row, String(word).trim()),
+    headword: text(pick(row, ['headword', '核心词'])),
+    synonyms: synonymList(row),
     source: text(pick(row, ['词书', '书名', 'source', 'book', 'source_book'])) || source,
     chapter: text(pick(row, ['章节', 'chapter', 'group', 'unit', '分类', 'level_label'])),
     errorCount: number(pick(row, ['错误次数', 'errorCount', 'error_count', 'wrongCount', 'frequency'])),
     errorSpelling: text(pick(row, ['错误拼写', 'errorSpelling', 'error_word', 'wrongSpelling'])),
   };
+}
+
+/** 结构化同替词群：高亮同替保留为数组，供配对训练使用（related 仍是展示文本）。 */
+function synonymList(row) {
+  const raw = pick(row, ['highlighted_synonyms', '同义词', 'synonyms']);
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return [...new Set(list.map((v) => text(v)).filter(Boolean))];
 }
 
 function relatedText(row, word) {

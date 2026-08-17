@@ -42,11 +42,12 @@ export function renderSettings(root, ctx) {
 
   const reviewCfg = data.settings.review || {};
   const modeSel = el('select', {}, [
-    el('option', { value: 'recognition', text: '看词回忆（自评）' }),
+    el('option', { value: 'synonym', text: '同替配对（英文 ↔ 英文）' }),
     el('option', { value: 'choice', text: '选择题（四选一）' }),
+    el('option', { value: 'recognition', text: '看词回忆（自评）' }),
     el('option', { value: 'spelling', text: '拼写自测' }),
   ]);
-  modeSel.value = ['choice', 'spelling'].includes(reviewCfg.wordMode) ? reviewCfg.wordMode : 'recognition';
+  modeSel.value = ['recognition', 'choice', 'spelling', 'synonym'].includes(reviewCfg.wordMode) ? reviewCfg.wordMode : 'synonym';
   const dailyNewIn = el('input', { type: 'number', min: '0', max: '200', value: String(reviewCfg.dailyNew != null ? reviewCfg.dailyNew : 10) });
   const pronounceIn = el('input', { type: 'checkbox', checked: reviewCfg.autoPronounce !== false });
   const accentSel = el('select', {}, [
@@ -277,7 +278,7 @@ export function renderSettings(root, ctx) {
               dailyNewIn.value = String(dailyNew);
               updateSettings({
                 review: {
-                  wordMode: ['recognition', 'choice', 'spelling'].includes(modeSel.value)
+                  wordMode: ['recognition', 'choice', 'spelling', 'synonym'].includes(modeSel.value)
                     ? modeSel.value
                     : 'recognition',
                   dailyNew,

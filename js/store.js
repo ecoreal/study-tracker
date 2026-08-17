@@ -19,7 +19,7 @@ const DEFAULT_DATA = () => ({
     autoStartNext: false, // 番茄结束后自动开始下一阶段
     dailyGoals: { focusMinutes: 120, focusCount: 4 },
     ieltsGoals: { listening: null, reading: null, overall: null },
-    review: { wordMode: 'recognition', dailyNew: 10, autoPronounce: true, accent: 'en-GB' },
+    review: { wordMode: 'synonym', dailyNew: 10, autoPronounce: true, accent: 'en-GB' },
   },
   tasks: [],
   sessions: [],
@@ -66,9 +66,9 @@ function migrate(raw) {
       review: {
         ...base.settings.review,
         ...raw.settings?.review,
-        wordMode: ['recognition', 'spelling', 'choice'].includes(raw.settings?.review?.wordMode)
+        wordMode: ['recognition', 'spelling', 'choice', 'synonym'].includes(raw.settings?.review?.wordMode)
           ? raw.settings.review.wordMode
-          : 'recognition',
+          : 'synonym',
         dailyNew: normalizeDailyNew(raw.settings?.review?.dailyNew),
         autoPronounce: raw.settings?.review?.autoPronounce !== false,
         accent: raw.settings?.review?.accent === 'en-US' ? 'en-US' : 'en-GB',
@@ -347,9 +347,10 @@ export function upsertVocabulary(entries) {
       continue;
     }
     const before = JSON.stringify(current);
-    for (const field of ['definition', 'phonetic', 'example', 'exampleTranslation', 'related', 'source', 'chapter', 'errorSpelling']) {
+    for (const field of ['definition', 'phonetic', 'example', 'exampleTranslation', 'related', 'source', 'chapter', 'errorSpelling', 'headword']) {
       if (!current[field] && next[field]) current[field] = next[field];
     }
+    if (!current.synonyms?.length && next.synonyms?.length) current.synonyms = next.synonyms;
     current.errorCount = Math.max(Number(current.errorCount) || 0, Number(next.errorCount) || 0);
     if (JSON.stringify(current) === before) result.skipped += 1;
     else {
@@ -754,6 +755,10 @@ export function normalizeVocabularyEntry(raw) {
     example: String(item.example ?? '').trim(),
     exampleTranslation: String(item.exampleTranslation ?? '').trim(),
     related: String(item.related ?? '').trim(),
+    headword: String(item.headword ?? '').trim(),
+    synonyms: Array.isArray(item.synonyms)
+      ? [...new Set(item.synonyms.map((v) => String(v ?? '').trim()).filter(Boolean))]
+      : [],
     source: source === '错题本' ? '爱听写 · 听力错词' : source,
     chapter: String(item.chapter ?? '').trim(),
     errorCount: Math.max(0, Math.round(Number(item.errorCount) || 0)),
