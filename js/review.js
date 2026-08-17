@@ -95,6 +95,21 @@ export function collectReviewItems(data) {
   return items;
 }
 
+/** New words introduced today — only first exposures (wasNew) count. */
+export function countNewToday(data, now = new Date()) {
+  const start = startOfDay(now).getTime();
+  return (data.reviewLogs || []).filter(
+    (log) => log.kind === 'word' && log.wasNew && (Date.parse(log.reviewedAt) || 0) >= start,
+  ).length;
+}
+
+/** Daily new-word budget left; 0 means new words are paused. */
+export function newWordBudget(data, now = new Date()) {
+  const dailyNew = Math.max(0, Math.round(Number(data.settings?.review?.dailyNew) || 0));
+  if (!dailyNew) return 0;
+  return Math.max(0, dailyNew - countNewToday(data, now));
+}
+
 export function buildReviewQueue(data, { kind = 'all', now = new Date() } = {}) {
   // `kind` is kept for callers from older versions; this queue is intentionally words only.
   const allItems = collectReviewItems(data).filter((item) => kind === 'all' || kind === 'word');
@@ -102,9 +117,17 @@ export function buildReviewQueue(data, { kind = 'all', now = new Date() } = {}) 
   const scheduled = allItems
     .filter((item) => item.card && dueTime(item.card) <= nowMs)
     .sort((a, b) => dueTime(a.card) - dueTime(b.card));
-  const fresh = allItems
+  let fresh = allItems
     .filter((item) => !item.card)
     .sort((a, b) => (Number(b.word.errorCount) || 0) - (Number(a.word.errorCount) || 0));
+  // 不背单词-style pacing: cap first exposures per day instead of dumping the
+  // whole book into one session. dailyNew 0 pauses new words; a missing value
+  // (pre-normalization data) keeps the old unlimited behaviour.
+  const dailyNewRaw = data.settings?.review?.dailyNew;
+  if (dailyNewRaw != null && dailyNewRaw !== '') {
+    const dailyNew = Math.max(0, Math.round(Number(dailyNewRaw) || 0));
+    fresh = fresh.slice(0, Math.max(0, dailyNew - countNewToday(data, now)));
+  }
   return [...scheduled, ...fresh];
 }
 
@@ -117,7 +140,7 @@ export function getReviewSummary(data, now = new Date()) {
   const logsToday = (data.reviewLogs || []).filter(
     (log) => log.kind === 'word' && (Date.parse(log.reviewedAt) || 0) >= start,
   );
-  const newAvailable = fresh.length;
+  const newAvailable = Math.min(fresh.length, newWordBudget(data, now));
   const mistakeReview = getMistakeReviewSummary(data, now);
   return {
     total: items.length,
@@ -126,6 +149,8 @@ export function getReviewSummary(data, now = new Date()) {
     scheduledDue: scheduledDue.length,
     newBacklog: fresh.length,
     newAvailable,
+    newToday: countNewToday(data, now),
+    dailyNew: Math.max(0, Math.round(Number(data.settings?.review?.dailyNew) || 0)),
     todayDue: scheduledDue.length + newAvailable,
     reviewedToday: logsToday.length,
     mature: items.filter((item) => item.card?.state === 2 && Number(item.card?.scheduled_days) >= 21).length,

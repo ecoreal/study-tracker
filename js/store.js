@@ -19,7 +19,7 @@ const DEFAULT_DATA = () => ({
     autoStartNext: false, // 番茄结束后自动开始下一阶段
     dailyGoals: { focusMinutes: 120, focusCount: 4 },
     ieltsGoals: { listening: null, reading: null, overall: null },
-    review: { wordMode: 'recognition' },
+    review: { wordMode: 'recognition', dailyNew: 10, autoPronounce: true, accent: 'en-GB' },
   },
   tasks: [],
   sessions: [],
@@ -65,7 +65,13 @@ function migrate(raw) {
       },
       review: {
         ...base.settings.review,
-        wordMode: raw.settings?.review?.wordMode === 'spelling' ? 'spelling' : 'recognition',
+        ...raw.settings?.review,
+        wordMode: ['recognition', 'spelling', 'choice'].includes(raw.settings?.review?.wordMode)
+          ? raw.settings.review.wordMode
+          : 'recognition',
+        dailyNew: normalizeDailyNew(raw.settings?.review?.dailyNew),
+        autoPronounce: raw.settings?.review?.autoPronounce !== false,
+        accent: raw.settings?.review?.accent === 'en-US' ? 'en-US' : 'en-GB',
       },
       subjects: Array.isArray(raw.settings?.subjects) && raw.settings.subjects.length
         ? raw.settings.subjects
@@ -554,8 +560,15 @@ function toBand(v) {
 }
 
 /* ---- Settings ---- */
-export function updateSettings(patch) {
-  data.settings = {
+/** Missing -> default 10; otherwise clamp 0..200 (0 = pause new words). */
+function normalizeDailyNew(value) {
+  if (value == null || value === '') return 10;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 10;
+  return Math.max(0, Math.min(200, n));
+}
+
+export function updateSettings(patch) {  data.settings = {
     ...data.settings,
     ...patch,
     pomodoro: { ...data.settings.pomodoro, ...(patch.pomodoro || {}) },

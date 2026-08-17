@@ -3519,3 +3519,64 @@ body[data-view="timer"] .mini-bar-root {
     transform: none;
   }
 }
+
+/* ===== 词汇学习流：选择题 / 学习卡（2026-08-17） ===== */
+
+.choice-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.choice-option {
+  text-align: left;
+  min-height: var(--tap-target);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+}
+
+.choice-option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-var) 45%, var(--border));
+  transform: translateY(-1px);
+}
+
+.choice-option:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.choice-option.correct {
+  border-color: var(--success);
+  background: var(--success-soft);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.choice-option.incorrect {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  opacity: 1;
+}
+
+.study-answer.learn-card {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+}
+
+.learn-card .learn-definition {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.learn-card .word-related {
+  margin: 8px 0 0;
+}

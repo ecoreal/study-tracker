@@ -49,9 +49,7 @@ export function renderReviewPanel(container, ctx) {
           el('span', { className: 'review-due-label', text: '个词待学习' }),
           el('p', {
             className: 'muted',
-            text: summary.scheduledDue
-              ? `${summary.scheduledDue} 个到期 · ${summary.newAvailable} 个新词`
-              : `${summary.newAvailable} 个新词 · 按你的节奏全部可学`,
+            text: planLine(summary),
           }),
         ]),
         el('div', { className: 'review-hero-actions' }, [
@@ -73,7 +71,7 @@ export function renderReviewPanel(container, ctx) {
       el('div', { className: 'review-stats' }, [
         stat('已复习', summary.reviewedToday, '今天'),
         stat('到期', summary.scheduledDue, '优先处理'),
-        stat('新词', summary.newBacklog, '全部可学'),
+        stat('新词', summary.newAvailable, `今日可学 · 库存 ${summary.newBacklog}`),
         stat('长期记忆', summary.mature, '间隔 ≥ 21 天'),
       ]),
       el('section', { className: 'card review-choice' }, [
@@ -86,6 +84,13 @@ export function renderReviewPanel(container, ctx) {
         ]),
       ]),
     );
+  }
+
+  function planLine(summary) {
+    const dueText = summary.scheduledDue ? `${summary.scheduledDue} 个到期` : '没有到期复习';
+    if (!summary.dailyNew) return `${dueText} · 新词已暂停`;
+    const remaining = Math.max(0, summary.dailyNew - summary.newToday);
+    return `${dueText} · 今日新词 ${summary.newToday}/${summary.dailyNew}，还可学 ${remaining} 个`;
   }
 
   function startButton(kind, label, style = 'btn-ghost') {
@@ -125,7 +130,13 @@ export function renderReviewPanel(container, ctx) {
       toast('这一组今天已经完成', 'success');
       return;
     }
-    const session = { queue, index: 0, results: { 1: 0, 2: 0, 3: 0, 4: 0 } };
+    const session = {
+      queue,
+      index: 0,
+      results: { 1: 0, 2: 0, 3: 0, 4: 0 },
+      learnedIds: new Set(),
+      requeued: 0,
+    };
     paintSession(session);
   }
 
@@ -135,7 +146,11 @@ export function renderReviewPanel(container, ctx) {
       return;
     }
     const item = session.queue[session.index];
-    const mode = getData().settings?.review?.wordMode === 'spelling' ? 'spelling' : 'recognition';
+    const reviewSettings = getData().settings?.review || {};
+    const mode = ['spelling', 'choice'].includes(reviewSettings.wordMode) ? reviewSettings.wordMode : 'recognition';
+    // 不背单词-style: a brand-new word gets a learning pass first, then comes
+    // back as a quiz at the end of today's queue.
+    const isLearnPass = item.kind === 'word' && !item.card && !session.learnedIds.has(item.id);
     const progress = Math.round((session.index / session.queue.length) * 100);
     const cardBody = el('div', { className: 'study-card-body' });
     const ratingArea = el('div', { className: 'review-rating-area', hidden: true });
@@ -157,11 +172,44 @@ export function renderReviewPanel(container, ctx) {
               el('div', { className: 'progress-fill', style: { width: `${progress}%` } }),
             ]),
           ]),
-          el('span', { className: 'badge', text: item.kind === 'word' ? '单词' : '错题' }),
+          el('span', { className: 'badge', text: isLearnPass ? '新词' : item.kind === 'word' ? '单词' : '错题' }),
         ]),
         el('div', { className: 'study-card' }, [cardBody, ratingArea]),
       ]),
     );
+
+    if (isLearnPass) {
+      session.learnedIds.add(item.id);
+      cardBody.append(
+        el('div', { className: 'study-card-kicker' }, [
+          el('span', { text: item.word.chapter || item.word.source || '词库' }),
+          el('span', { className: 'badge', text: '新词' }),
+        ]),
+        el('div', { className: 'word-prompt' }, [
+          el('h3', { text: item.word.word }),
+          item.word.phonetic ? el('p', { className: 'word-phonetic', text: `/${item.word.phonetic}/` }) : null,
+          speakButton(item.word.word),
+        ]),
+        el('div', { className: 'study-answer learn-card' }, [
+          item.word.definition
+            ? el('p', { className: 'learn-definition', text: item.word.definition })
+            : el('p', { className: 'muted', text: '暂无释义' }),
+          item.word.related ? el('p', { className: 'word-related', text: `同义替换：${item.word.related}` }) : null,
+        ]),
+        el('button', {
+          type: 'button',
+          className: 'btn btn-primary',
+          text: '记住了，稍后测',
+          onClick: () => {
+            session.queue.push({ ...item });
+            session.index += 1;
+            paintSession(session);
+          },
+        }),
+      );
+      if (reviewSettings.autoPronounce !== false) speakWord(item.word.word);
+      return;
+    }
 
     const reveal = () => {
       if (revealed) return;
@@ -173,9 +221,18 @@ export function renderReviewPanel(container, ctx) {
 
     if (item.kind === 'word') renderWordPrompt(cardBody, item.word, mode, reveal);
     else renderMistakePrompt(cardBody, item, reveal);
+    if (item.kind === 'word' && reviewSettings.autoPronounce !== false) speakWord(item.word.word);
   }
 
   function renderWordPrompt(root, word, mode, reveal) {
+    if (mode === 'choice' && word.definition) {
+      const options = buildChoiceOptions(word);
+      if (options) {
+        renderWordChoice(root, word, options, reveal);
+        return;
+      }
+      // 词库太小凑不齐干扰项时退回顾读模式
+    }
     const useSpelling = mode === 'spelling' && Boolean(word.definition);
     root.append(
       el('div', { className: 'study-card-kicker' }, [
@@ -230,6 +287,71 @@ export function renderReviewPanel(container, ctx) {
       ]),
     );
     setTimeout(() => input.focus(), 50);
+  }
+
+  /** 四选一：正确释义 + 3 个干扰项，同章节的优先（难度更接近）。 */
+  function buildChoiceOptions(word) {
+    const vocab = getData().vocabulary || [];
+    const usedWords = new Set([normalizeSpelling(word.word)]);
+    const usedDefinitions = new Set([String(word.definition).trim()]);
+    const pick = (pool) => {
+      const out = [];
+      for (const candidate of shuffle(pool)) {
+        if (out.length >= 3) break;
+        const definition = String(candidate.definition || '').trim();
+        if (!definition || usedDefinitions.has(definition)) continue;
+        if (usedWords.has(normalizeSpelling(candidate.word))) continue;
+        usedDefinitions.add(definition);
+        usedWords.add(normalizeSpelling(candidate.word));
+        out.push({ text: definition, correct: false });
+      }
+      return out;
+    };
+    const others = vocab.filter((item) => item.id !== word.id);
+    let distractors = pick(others.filter((item) => item.chapter && item.chapter === word.chapter));
+    if (distractors.length < 3) distractors = [...distractors, ...pick(others)];
+    if (distractors.length < 3) return null;
+    return shuffle([{ text: String(word.definition).trim(), correct: true }, ...distractors]);
+  }
+
+  function renderWordChoice(root, word, options, reveal) {
+    let answered = false;
+    root.append(
+      el('div', { className: 'study-card-kicker' }, [
+        el('span', { text: word.chapter || word.source || '词库' }),
+        el('span', { className: 'badge', text: '选出正确释义' }),
+      ]),
+      el('div', { className: 'word-prompt' }, [
+        el('h3', { text: word.word }),
+        word.phonetic ? el('p', { className: 'word-phonetic', text: `/${word.phonetic}/` }) : null,
+        speakButton(word.word),
+      ]),
+      el('div', { className: 'choice-grid' }, options.map((option) => {
+        const button = el('button', { type: 'button', className: 'choice-option' });
+        if (option.correct) button.dataset.correct = '1';
+        button.append(document.createTextNode(option.text));
+        button.addEventListener('click', () => {
+          if (answered) return;
+          answered = true;
+          root.querySelectorAll('.choice-option').forEach((node) => {
+            node.disabled = true;
+            if (node.dataset.correct === '1') node.classList.add('correct');
+          });
+          if (!option.correct) button.classList.add('incorrect');
+          setTimeout(reveal, 650);
+        });
+        return button;
+      })),
+    );
+  }
+
+  function shuffle(list) {
+    const out = [...list];
+    for (let i = out.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
   }
 
   function renderMistakePrompt(root, item, reveal) {
@@ -306,6 +428,11 @@ export function renderReviewPanel(container, ctx) {
               });
               item.card = result.card;
               session.results[meta.value] += 1;
+              // 忘记的词本场稍后再来一次（每词最多重排 2 次，防死循环）
+              if (meta.value === 1 && (item.requeues || 0) < 2) {
+                session.queue.push({ ...item, requeues: (item.requeues || 0) + 1 });
+                session.requeued += 1;
+              }
               session.index += 1;
               paintSession(session);
             } catch (error) {
@@ -337,7 +464,7 @@ export function renderReviewPanel(container, ctx) {
     mount.replaceChildren(el('section', { className: 'review-complete' }, [
       el('span', { className: 'complete-mark', text: '✓' }),
       el('h3', { text: '本轮复习完成' }),
-      el('p', { className: 'muted', text: `完成 ${session.queue.length} 项 · 记住 ${remembered} 项` }),
+      el('p', { className: 'muted', text: `完成 ${session.queue.length} 项 · 记住 ${remembered} 项${session.requeued ? ` · 重学 ${session.requeued} 次` : ''}` }),
       el('div', { className: 'complete-ratings' }, RATING_META.map((meta) =>
         el('div', {}, [
           el('strong', { text: String(session.results[meta.value]) }),
@@ -916,6 +1043,15 @@ export function renderReviewPreferences(container, ctx) {
   ]));
 }
 
+function speakWord(word) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = getData().settings?.review?.accent === 'en-US' ? 'en-US' : 'en-GB';
+  utterance.rate = 0.85;
+  speechSynthesis.speak(utterance);
+}
+
 function speakButton(word) {
   return el('button', {
     type: 'button',
@@ -928,11 +1064,7 @@ function speakButton(word) {
         toast('当前浏览器不支持朗读', 'error');
         return;
       }
-      speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-GB';
-      utterance.rate = 0.85;
-      speechSynthesis.speak(utterance);
+      speakWord(word);
     },
   });
 }

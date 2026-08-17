@@ -40,6 +40,21 @@ export function renderSettings(root, ctx) {
   const goalMinIn = numInput(goals.focusMinutes || 120);
   const goalCountIn = numInput(goals.focusCount || 4);
 
+  const reviewCfg = data.settings.review || {};
+  const modeSel = el('select', {}, [
+    el('option', { value: 'recognition', text: '看词回忆（自评）' }),
+    el('option', { value: 'choice', text: '选择题（四选一）' }),
+    el('option', { value: 'spelling', text: '拼写自测' }),
+  ]);
+  modeSel.value = ['choice', 'spelling'].includes(reviewCfg.wordMode) ? reviewCfg.wordMode : 'recognition';
+  const dailyNewIn = el('input', { type: 'number', min: '0', max: '200', value: String(reviewCfg.dailyNew != null ? reviewCfg.dailyNew : 10) });
+  const pronounceIn = el('input', { type: 'checkbox', checked: reviewCfg.autoPronounce !== false });
+  const accentSel = el('select', {}, [
+    el('option', { value: 'en-GB', text: '英音' }),
+    el('option', { value: 'en-US', text: '美音' }),
+  ]);
+  accentSel.value = reviewCfg.accent === 'en-US' ? 'en-US' : 'en-GB';
+
   const ieltsGoals = data.settings.ieltsGoals || {};
   const goalListening = bandSelect(ieltsGoals.listening);
   const goalReading = bandSelect(ieltsGoals.reading);
@@ -232,6 +247,45 @@ export function renderSettings(root, ctx) {
                 },
               });
               toast('雅思目标分已保存', 'success');
+            },
+          }),
+        ]),
+      ]),
+
+      el('section', { className: 'card form-grid' }, [
+        el('h3', { text: '词汇复习' }),
+        el('p', {
+          className: 'help',
+          text: '新词先出学习卡再测试；选择题优先用同章节词做干扰项。每日新词 0 表示暂停学新词。',
+        }),
+        el('div', { className: 'form-row inline' }, [
+          fieldRow('复习模式', modeSel),
+          fieldRow('每日新词', dailyNewIn),
+          fieldRow('朗读口音', accentSel),
+        ]),
+        el('div', { className: 'checkbox-row' }, [
+          pronounceIn,
+          el('label', { text: '展示单词时自动朗读' }),
+        ]),
+        el('div', { className: 'btn-row' }, [
+          el('button', {
+            type: 'button',
+            className: 'btn btn-primary',
+            text: '保存复习设置',
+            onClick: () => {
+              const dailyNew = clampInt(dailyNewIn.value, 0, 200, 10);
+              dailyNewIn.value = String(dailyNew);
+              updateSettings({
+                review: {
+                  wordMode: ['recognition', 'choice', 'spelling'].includes(modeSel.value)
+                    ? modeSel.value
+                    : 'recognition',
+                  dailyNew,
+                  autoPronounce: pronounceIn.checked,
+                  accent: accentSel.value === 'en-US' ? 'en-US' : 'en-GB',
+                },
+              });
+              toast('词汇复习设置已保存', 'success');
             },
           }),
         ]),
