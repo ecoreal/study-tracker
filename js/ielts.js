@@ -59,6 +59,14 @@ export function bandFromRaw(subject, correctCount) {
 }
 
 /** Approximate required correct rate (over TOTAL questions) for a given target band. */
+/** Whole days from `todayStr` until `dateStr` ('YYYY-MM-DD'); null when unset/invalid, negative when past. */
+export function daysUntilDate(dateStr, today) {
+  if (!dateStr) return null;
+  const target = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.round((target - new Date(`${today}T00:00:00`)) / 86400000);
+}
+
 export function requiredRateForBand(subject, targetBand) {
   if (targetBand == null || Number.isNaN(Number(targetBand))) return null;
   const map = subject === 'reading'

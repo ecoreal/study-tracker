@@ -1,7 +1,7 @@
 import { el, progressBar, toast } from './components.js';
 import { getData, todayStr, toggleTask, addTask, rolloverOpenTasksToToday } from '../store.js';
 import { streakDays, todayFocusStats, todayTasksStats, weekFocusMinutes } from '../stats.js';
-import { formatBand, bandOf } from '../ielts.js';
+import { formatBand, bandOf, daysUntilDate } from '../ielts.js';
 import * as pomodoro from '../pomodoro.js';
 import { buildCoachPlan, formatMinutes } from '../coach.js';
 import { getReviewSummary } from '../review.js';
@@ -362,10 +362,7 @@ function createLiveTimer(ctx) {
 
 /** Days until the exam; null when unset/invalid, negative when past. */
 function examDaysAway(dateStr, today) {
-  if (!dateStr) return null;
-  const exam = new Date(`${dateStr}T00:00:00`);
-  if (Number.isNaN(exam.getTime())) return null;
-  return Math.round((exam - new Date(`${today}T00:00:00`)) / 86400000);
+  return daysUntilDate(dateStr, today);
 }
 
 /** Dashboard chip: 🔥 streak always, 📅 countdown when it is still ahead. */

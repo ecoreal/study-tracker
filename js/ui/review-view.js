@@ -1,7 +1,10 @@
 import { el, modal, toast } from './components.js';
+import { daysUntilDate } from '../ielts.js';
 import {
   getData,
   getMeta,
+  todayStr,
+  updateSettings,
   upsertVocabulary,
   addVocabulary,
   updateVocabulary,
@@ -9,7 +12,6 @@ import {
   importIeltsMistakes,
   markMistakeReview,
   applyReviewResult,
-  updateSettings,
 } from '../store.js';
 import {
   buildReviewQueue,
@@ -68,6 +70,7 @@ export function renderReviewPanel(container, ctx) {
           }),
         ]),
       ]),
+      examPacingBanner(summary),
       el('div', { className: 'review-stats' }, [
         stat('已复习', summary.reviewedToday, '今天'),
         stat('到期', summary.scheduledDue, '优先处理'),
@@ -87,10 +90,40 @@ export function renderReviewPanel(container, ctx) {
   }
 
   function planLine(summary) {
+    const exam = getData().settings?.ieltsGoals?.examDate;
+    const days = daysUntilDate(exam, todayStr());
+    const examText = days != null && days >= 0 ? ` · 距考试 ${days} 天` : '';
     const dueText = summary.scheduledDue ? `${summary.scheduledDue} 个到期` : '没有到期复习';
-    if (!summary.dailyNew) return `${dueText} · 新词已暂停`;
+    if (!summary.dailyNew) return `${dueText} · 新词已暂停${examText}`;
     const remaining = Math.max(0, summary.dailyNew - summary.newToday);
-    return `${dueText} · 今日新词 ${summary.newToday}/${summary.dailyNew}，还可学 ${remaining} 个`;
+    return `${dueText} · 今日新词 ${summary.newToday}/${summary.dailyNew}，还可学 ${remaining} 个${examText}`;
+  }
+
+  /** 考前节奏提示：按当前每日新词量，考前过不完第一轮时给出一键调整。 */
+  function examPacingBanner(summary) {
+    const days = daysUntilDate(getData().settings?.ieltsGoals?.examDate, todayStr());
+    if (days == null || days <= 0 || !summary.dailyNew || !summary.newBacklog) return null;
+    const required = Math.min(200, Math.ceil(summary.newBacklog / days));
+    if (required <= summary.dailyNew) return null;
+    return el('section', { className: 'card pacing-banner' }, [
+      el('div', {}, [
+        el('strong', { text: `⏳ 距考试还有 ${days} 天` }),
+        el('p', {
+          className: 'muted',
+          text: `新词还剩 ${summary.newBacklog} 个，当前 ${summary.dailyNew} 个/天考前过不完第一轮。建议 ${required} 个/天。`,
+        }),
+      ]),
+      el('button', {
+        type: 'button',
+        className: 'btn btn-primary btn-sm',
+        text: `调整为 ${required}/天`,
+        onClick: () => {
+          updateSettings({ review: { dailyNew: required } });
+          toast(`每日新词已调整为 ${required} 个`, 'success');
+          ctx.refreshView();
+        },
+      }),
+    ]);
   }
 
   function startButton(kind, label, style = 'btn-ghost') {

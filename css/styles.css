@@ -3601,3 +3601,24 @@ body[data-view="timer"] .mini-bar-root {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
+
+/* ===== 考前节奏横幅（2026-08-17） ===== */
+
+.pacing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-soft) 45%, var(--bg-elevated)),
+      var(--bg-elevated) 65%
+    );
+}
+
+.pacing-banner .muted {
+  margin: 4px 0 0;
+}
